@@ -2,11 +2,6 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useTerminalStore, type TerminalEntry } from '../../stores/terminalStore';
 import { useSessionStore } from '../../stores/sessionStore';
 
-/** Strip ANSI escape sequences for clean display */
-function stripAnsi(s: string): string {
-  return s.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1b\].*?(\x07|\x1b\\)/g, '');
-}
-
 /** Convert ANSI color codes to CSS classes (basic subset) */
 function ansiToHtml(s: string): string {
   let result = '';

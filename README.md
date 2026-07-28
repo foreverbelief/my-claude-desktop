@@ -31,6 +31,10 @@ MY-CODE 是 TOKENICODE 的 Fork，保留了核心架构（Tauri 2 + React 19 + C
 | Git for Windows | 最新版 | 提供 Claude Code 所需的 Bash 环境 |
 | Claude Code CLI | 最新版 | `npm install -g @anthropic-ai/claude-code` |
 
+## 下载安装包
+
+从 [Releases](https://github.com/foreverbelief/my-claude-desktop/releases) 下载最新 MSI 安装包，双击即可安装。
+
 ## 从源码编译
 
 | 工具 | 版本 | 安装方式 |
@@ -45,7 +49,8 @@ MY-CODE 是 TOKENICODE 的 Fork，保留了核心架构（Tauri 2 + React 19 + C
 git clone https://github.com/foreverbelief/my-claude-desktop.git
 cd my-claude-desktop
 pnpm install
-pnpm tauri build  # 产物在 src-tauri/target/release/mycode.exe
+pnpm tauri build  # 产物: src-tauri/target/release/mycode.exe (exe)
+                  #        src-tauri/target/release/bundle/msi/MY-CODE_*.msi (安装包)
 ```
 
 ## 依赖
