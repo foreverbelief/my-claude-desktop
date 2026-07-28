@@ -209,6 +209,19 @@ export function InputBar() {
     prevInputDraftRef.current = inputDraft;
   }, [inputDraft]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Message history navigation (ArrowUp/Down)
+  const historyIndexRef = useRef(-1);       // -1 = normal mode, 0+ = history position
+  const savedDraftRef = useRef<string>(''); // draft saved before navigating history
+
+  /** Get user message texts for current session, newest first */
+  const getUserHistory = useCallback((): string[] => {
+    const msgs = getActiveTabState().messages;
+    return msgs
+      .filter((m) => m.role === 'user' && m.type === 'text' && m.content?.trim())
+      .map((m) => m.content.trim())
+      .reverse(); // newest first (index 0)
+  }, []);
   const sessionStatus = useActiveTab((t) => t.sessionStatus);
   const activityPhase = useActiveTab((t) => t.activityStatus.phase);
   const addMessage = useChatStore((s) => s.addMessage);
@@ -261,8 +274,8 @@ export function InputBar() {
   // Listen for plan-execute events from PlanReviewCard and Enter shortcut
   useEffect(() => {
     const handler = () => handlePlanApprove();
-    window.addEventListener('tokenicode:plan-execute', handler);
-    return () => window.removeEventListener('tokenicode:plan-execute', handler);
+    window.addEventListener('mycode:plan-execute', handler);
+    return () => window.removeEventListener('mycode:plan-execute', handler);
   }, [handlePlanApprove]);
 
   // Floating approval cards — unresolved plan_review / question messages
@@ -311,8 +324,8 @@ export function InputBar() {
 
       textareaRef.current.insertFileChip({ fullPath, label: displayPath });
     };
-    window.addEventListener('tokenicode:tree-file-inline', onTreeFileInline);
-    return () => window.removeEventListener('tokenicode:tree-file-inline', onTreeFileInline);
+    window.addEventListener('mycode:tree-file-inline', onTreeFileInline);
+    return () => window.removeEventListener('mycode:tree-file-inline', onTreeFileInline);
   }, []);
 
   // Slash command state
@@ -349,11 +362,11 @@ export function InputBar() {
         }
       }
     };
-    window.addEventListener('tokenicode:rewind', handler);
-    return () => window.removeEventListener('tokenicode:rewind', handler);
+    window.addEventListener('mycode:rewind', handler);
+    return () => window.removeEventListener('mycode:rewind', handler);
   }, [canRewind, t]);
 
-  // Double-Esc rewind shortcut disabled (#36 / #71) — rewind feature is hidden in TOKENICODE
+  // Double-Esc rewind shortcut disabled (#36 / #71) — rewind feature is hidden in MY-CODE
 
   // Drag state (file drop)
   const [isDragging, setIsDragging] = useState(false);
@@ -487,7 +500,7 @@ export function InputBar() {
         return;
 
       case 'rewind':
-        window.dispatchEvent(new CustomEvent('tokenicode:rewind'));
+        window.dispatchEvent(new CustomEvent('mycode:rewind'));
         return;
 
       // /compact is handled in the session stdin commands group below
@@ -617,7 +630,7 @@ export function InputBar() {
 
 
       // --- All CLI commands: pass through to active session via stdin ---
-      // TOKENICODE is a GUI wrapper — all slash commands are handled by Claude Code CLI.
+      // MY-CODE is a GUI wrapper — all slash commands are handled by Claude Code CLI.
       default: {
         const stdinId = getActiveTabState().sessionMeta.stdinId;
         if (stdinId && tabId) {
@@ -715,7 +728,7 @@ export function InputBar() {
         resolved: true,
         interactionState: 'resolved',
       });
-      window.dispatchEvent(new CustomEvent('tokenicode:plan-execute'));
+      window.dispatchEvent(new CustomEvent('mycode:plan-execute'));
       return;
     }
 
@@ -883,7 +896,7 @@ export function InputBar() {
         const currentFp = envFingerprint();
         const sessionFp = getActiveTabState().sessionMeta.envFingerprint;
         if (currentFp !== sessionFp) {
-          console.warn('[TOKENICODE] API provider config changed, killing stale session');
+          console.warn('[MY-CODE] API provider config changed, killing stale session');
           bridge.killSession(stdinId).catch(() => {});
           if ((window as any).__claudeUnlisteners?.[stdinId]) {
             (window as any).__claudeUnlisteners[stdinId]();
@@ -898,7 +911,7 @@ export function InputBar() {
           const currentMode = useSettingsStore.getState().sessionMode;
           const spawnedMode = getActiveTabState().sessionMeta.snapshotMode;
           if (spawnedMode && currentMode !== spawnedMode) {
-            console.warn(`[TOKENICODE] Permission mode changed (${spawnedMode} -> ${currentMode}), killing stale session`);
+            console.warn(`[MY-CODE] Permission mode changed (${spawnedMode} -> ${currentMode}), killing stale session`);
             bridge.killSession(stdinId).catch(() => {});
             if ((window as any).__claudeUnlisteners?.[stdinId]) {
               (window as any).__claudeUnlisteners[stdinId]();
@@ -910,7 +923,7 @@ export function InputBar() {
           const currentContextMode = useSettingsStore.getState().contextWindowMode;
           const spawnedContextMode = getActiveTabState().sessionMeta.snapshotContextWindowMode ?? 'default';
           if (currentContextMode !== spawnedContextMode) {
-            console.warn(`[TOKENICODE] Context window mode changed (${spawnedContextMode} -> ${currentContextMode}), killing stale session`);
+            console.warn(`[MY-CODE] Context window mode changed (${spawnedContextMode} -> ${currentContextMode}), killing stale session`);
             bridge.killSession(stdinId).catch(() => {});
             if ((window as any).__claudeUnlisteners?.[stdinId]) {
               (window as any).__claudeUnlisteners[stdinId]();
@@ -926,7 +939,7 @@ export function InputBar() {
           if (spawnedModel && currentModel !== spawnedModel) {
             const oldShort = MODEL_OPTIONS.find((m) => m.id === spawnedModel)?.short ?? displayDeepSeekModelName(spawnedModel);
             const newShort = MODEL_OPTIONS.find((m) => m.id === currentModel)?.short ?? displayDeepSeekModelName(currentModel);
-            console.warn(`[TOKENICODE] Model changed (${oldShort} → ${newShort}), killing stale session`);
+            console.warn(`[MY-CODE] Model changed (${oldShort} → ${newShort}), killing stale session`);
             bridge.killSession(stdinId).catch(() => {});
             if ((window as any).__claudeUnlisteners?.[stdinId]) {
               (window as any).__claudeUnlisteners[stdinId]();
@@ -960,7 +973,7 @@ export function InputBar() {
           } catch (stdinErr) {
             // stdin write failed (broken pipe — process already exited).
             // Clean up dead listeners (P0-5 fix) and fall through to spawn a new process.
-            console.warn('[TOKENICODE] sendStdin failed, spawning new process:', stdinErr);
+            console.warn('[MY-CODE] sendStdin failed, spawning new process:', stdinErr);
             if ((window as any).__claudeUnlisteners?.[stdinId]) {
               (window as any).__claudeUnlisteners[stdinId]();
               delete (window as any).__claudeUnlisteners[stdinId];
@@ -1126,7 +1139,7 @@ export function InputBar() {
         const liveProviderId = useProviderStore.getState().activeProviderId || null;
         const liveResolvedModel = resolveModelForProvider(selectedModel);
         const liveContextWindow = getContextWindowForModel(liveResolvedModel, liveContextWindowMode);
-        console.log('[TOKENICODE:session] starting session', { cwd, stdinId: preGeneratedId, mode: liveSessionMode, provider: liveProviderId });
+        console.log('[MY-CODE:session] starting session', { cwd, stdinId: preGeneratedId, mode: liveSessionMode, provider: liveProviderId });
         const session = await bridge.startSession({
           prompt: text,
           cwd,
@@ -1139,7 +1152,7 @@ export function InputBar() {
           context_window: liveContextWindow,
           permission_mode: mapSessionModeToPermissionMode(liveSessionMode),
         });
-        console.log('[TOKENICODE:session] started successfully', { sessionId: session.session_id, pid: session.pid, cli: session.cli_path });
+        console.log('[MY-CODE:session] started successfully', { sessionId: session.session_id, pid: session.pid, cli: session.cli_path });
 
         // Store both: session_id for tracking, stdinId (preGeneratedId) for stdin communication
         setSessionMeta(tabId, {
@@ -1211,7 +1224,21 @@ export function InputBar() {
 
     // Strip ANSI escape codes so regex matching works on raw text
     const clean = stripAnsi(line).trim();
-    console.log('[TOKENICODE:stderr]', clean);
+    console.log('[MY-CODE:stderr]', clean);
+    // Push stderr to terminal panel
+    if (clean) {
+      const sessionState = useSessionStore.getState();
+      const terminalTabId = sid ? sessionState.getTabForStdin(sid) || sessionState.selectedSessionId : sessionState.selectedSessionId;
+      if (terminalTabId) {
+        import('../../stores/terminalStore').then(({ useTerminalStore }) => {
+          useTerminalStore.getState().addEntry(terminalTabId, {
+            timestamp: Date.now(),
+            text: clean,
+            kind: 'stderr',
+          });
+        }).catch(() => {});
+      }
+    }
 
     // Track last non-trivial stderr line for error reporting on unexpected exit
     if (clean && !/^\s*$/.test(clean)) {
@@ -1276,7 +1303,7 @@ export function InputBar() {
     // Drain any events that were queued while handler was unavailable
     const queue: any[] = (window as any).__claudeStreamQueue;
     if (queue && queue.length > 0) {
-      console.warn(`[TOKENICODE] draining ${queue.length} queued stream events on handler mount`);
+      console.warn(`[MY-CODE] draining ${queue.length} queued stream events on handler mount`);
       const pending = queue.splice(0);
       for (const msg of pending) handleStreamMessage(msg);
     }
@@ -1324,6 +1351,54 @@ export function InputBar() {
       e.preventDefault();
       useCommandStore.getState().clearPrefix();
       return true;
+    }
+
+    // Input history navigation (ArrowUp/Down when NOT in slash mode)
+    if (!slashVisible && !e.metaKey && !e.ctrlKey) {
+      if (e.key === 'ArrowUp') {
+        const handle = textareaRef.current;
+        if (!handle) return;
+        const alreadyNavigating = historyIndexRef.current >= 0;
+        // Allow history when input is empty, cursor is at position 0, or already navigating
+        if (!alreadyNavigating) {
+          const isEmpty = handle.isEmpty?.() ?? true;
+          const tipEditor = handle.getEditor();
+          const cursorFrom = tipEditor?.state?.selection?.from;
+          const atStart = isEmpty || cursorFrom === 0 || cursorFrom == null;
+          if (!atStart) return;
+        }
+        e.preventDefault();
+        const history = getUserHistory();
+        if (history.length === 0) return true;
+        if (historyIndexRef.current === -1) {
+          savedDraftRef.current = handle.getText() ?? '';
+        }
+        const nextIdx = Math.min(historyIndexRef.current + 1, history.length - 1);
+        historyIndexRef.current = nextIdx;
+        setInputSync(history[nextIdx]);
+        return true;
+      }
+      if (e.key === 'ArrowDown') {
+        const handle = textareaRef.current;
+        if (!handle) return;
+        if (historyIndexRef.current === -1) return;
+        e.preventDefault();
+        if (historyIndexRef.current <= 0) {
+          historyIndexRef.current = -1;
+          setInputSync(savedDraftRef.current);
+        } else {
+          const history = getUserHistory();
+          historyIndexRef.current--;
+          setInputSync(history[historyIndexRef.current]);
+        }
+        return true;
+      }
+    }
+
+    // Reset history index on any typing action
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown'
+      && e.key !== 'Shift' && e.key !== 'Alt' && e.key !== 'Control' && e.key !== 'Meta') {
+      historyIndexRef.current = -1;
     }
 
     if (e.key !== 'Enter') return;

@@ -64,15 +64,15 @@ export function Sidebar() {
   // Window dragging handled via CSS -webkit-app-region: drag on the top strip
 
   return (
-    <div className="flex flex-col h-full pt-8 pb-4">
+    <div className="flex flex-col h-full pt-10 pb-4">
       {/* Logo area */}
       <div
-        className="flex items-center justify-between mb-6 px-5 cursor-default">
+        className="flex items-center justify-between mb-4 px-4 cursor-default">
         <div className="flex items-center">
           {IS_ALPHA ? (
             <>
               <span className="text-[14px] font-bold tracking-tight text-text-primary">
-                TC<span style={{color: 'var(--color-accent)'}}>/</span>Alpha
+                MY<span style={{color: 'var(--color-accent)'}}>-</span>CODE
               </span>
               <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase
                 bg-accent/15 text-accent leading-none">
@@ -87,12 +87,16 @@ export function Sidebar() {
                 className="rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/40"
                 title="个人资料"
               >
-                <img src="/app-icon.png" alt="" className="w-8 h-8 rounded-lg shadow-sm" />
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none"
+                  className="w-8 h-8 rounded-lg shadow-sm">
+                  <rect width="32" height="32" rx="8" fill="#18181b"/>
+                  <path d="M9 21V11l5.5 5.5L20 11v10" stroke="white" strokeWidth="2"
+                    strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
               </button>
               <span className="text-[18px] font-bold tracking-wide text-text-primary">
-                TOKEN<span className="text-accent">/</span>CODE
+                MY<span className="text-accent">-</span>CODE
               </span>
-              <span className="text-[16px] text-success">♧</span>
             </div>
           )}
         </div>
@@ -107,7 +111,7 @@ export function Sidebar() {
       </div>
 
       {/* New Chat — navigate to WelcomeScreen where user picks a folder */}
-      <div className="px-3">
+      <div className="px-2.5">
       <button onClick={() => {
         const workingDirectory = useSettingsStore.getState().workingDirectory;
         if (!workingDirectory) {
@@ -149,7 +153,7 @@ export function Sidebar() {
           flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full flex-shrink-0 transition-smooth
             ${sessionStatus === 'running'
-              ? 'bg-success shadow-[0_0_8px_var(--color-accent-glow)] animate-pulse-soft'
+              ? 'bg-success'
               : sessionStatus === 'completed' ? 'bg-success'
               : sessionStatus === 'error' ? 'bg-error'
               : 'bg-text-tertiary'}`} />
@@ -170,14 +174,14 @@ export function Sidebar() {
       </div>
 
       {/* Conversation History */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 -mr-1.5 pr-1.5">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 -mr-1 pr-1">
         <ConversationList />
       </div>
 
       {/* Footer */}
       <div className="pt-3 mt-3 border-t border-border-subtle px-3">
         <button onClick={() => setSecondaryTab('preview')}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl
+          className="w-full flex items-center justify-center gap-2.5 px-3 py-2 rounded-xl
             text-sm text-text-muted hover:bg-bg-secondary hover:text-text-primary
             transition-smooth">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
@@ -187,7 +191,7 @@ export function Sidebar() {
           {t('panel.preview')}
         </button>
         <button onClick={() => setSecondaryTab('skills')}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl
+          className="w-full flex items-center justify-center gap-2.5 px-3 py-2 rounded-xl
             text-sm text-text-muted hover:bg-bg-secondary hover:text-text-primary
             transition-smooth">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
@@ -197,7 +201,7 @@ export function Sidebar() {
           {t('panel.skills')}
         </button>
         <button onClick={toggleSettings}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl
+          className="w-full flex items-center justify-center gap-2.5 px-3 py-2 rounded-xl
             text-sm text-text-muted hover:bg-bg-secondary hover:text-text-primary
             transition-smooth">
           <div className="relative">

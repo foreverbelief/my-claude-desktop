@@ -101,7 +101,7 @@ export function PlanReviewCard({ message, floating }: Props) {
     if (planTabId) {
       useChatStore.getState().updateMessage(planTabId, message.id, { resolved: true, interactionState: 'resolved' });
     }
-    window.dispatchEvent(new CustomEvent('tokenicode:plan-execute'));
+    window.dispatchEvent(new CustomEvent('mycode:plan-execute'));
   }, [isResolved, approving, message.id, message.permissionData]);
 
   const handleModify = useCallback(() => {

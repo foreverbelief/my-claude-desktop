@@ -50,3 +50,9 @@ package-lock.json
 
 # Obsidian
 .obsidian/
+
+# Claude Code workspace
+.claude/
+
+# Trellis workflow tool
+.trellis/

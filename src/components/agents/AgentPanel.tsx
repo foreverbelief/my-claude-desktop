@@ -71,12 +71,7 @@ function ElapsedTime({ startTime, endTime }: { startTime: number; endTime?: numb
 function StatusDot({ phase }: { phase: AgentPhase }) {
   const config = phaseConfig[phase];
   return (
-    <span className="relative flex-shrink-0 w-2 h-2">
-      {config.pulse && (
-        <span className={`absolute inset-0 rounded-full animate-ping ${config.pulseColor}`} />
-      )}
-      <span className={`relative block w-2 h-2 rounded-full ${config.color}`} />
-    </span>
+    <span className={`flex-shrink-0 w-2 h-2 rounded-full ${config.color}`} />
   );
 }
 

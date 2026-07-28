@@ -155,79 +155,6 @@ function formatElapsed(ms: number): string {
   return `${m}m ${s}s`;
 }
 
-/** Cycling typewriter text for thinking phase — like Claude Code website "Built for > coders" */
-const THINKING_WORD_COUNT = 17;
-const TYPING_SPEED = 80;      // ms per character (typing)
-const DELETING_SPEED = 40;    // ms per character (deleting)
-const PAUSE_DURATION = 2500;  // ms to hold full word
-const TRANSITION_DELAY = 300; // ms between delete and next word
-
-/** Fisher-Yates shuffle, always starts with index 0 ("思考中"/"Thinking") */
-function shuffledOrder(count: number): number[] {
-  const arr = Array.from({ length: count }, (_, i) => i);
-  for (let i = arr.length - 1; i > 1; i--) {
-    const j = 1 + Math.floor(Math.random() * i); // skip index 0
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
-function CyclingThinkingText() {
-  const t = useT();
-  const [order, setOrder] = useState(() => shuffledOrder(THINKING_WORD_COUNT));
-  const [cursor, setCursor] = useState(0);
-  const [displayText, setDisplayText] = useState('');
-  const [phase, setPhase] = useState<'typing' | 'pausing' | 'deleting' | 'waiting'>('typing');
-
-  const wordIndex = order[cursor];
-  const fullWord = t(`chat.thinkingCycle.${wordIndex}`);
-
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-
-    if (phase === 'typing') {
-      if (displayText.length < fullWord.length) {
-        timer = setTimeout(() => {
-          setDisplayText(fullWord.slice(0, displayText.length + 1));
-        }, TYPING_SPEED);
-      } else {
-        timer = setTimeout(() => setPhase('pausing'), 0);
-      }
-    } else if (phase === 'pausing') {
-      timer = setTimeout(() => setPhase('deleting'), PAUSE_DURATION);
-    } else if (phase === 'deleting') {
-      if (displayText.length > 0) {
-        timer = setTimeout(() => {
-          setDisplayText(displayText.slice(0, -1));
-        }, DELETING_SPEED);
-      } else {
-        const nextCursor = cursor + 1;
-        if (nextCursor >= THINKING_WORD_COUNT) {
-          // Reshuffle when all words shown
-          setOrder(shuffledOrder(THINKING_WORD_COUNT));
-          setCursor(0);
-        } else {
-          setCursor(nextCursor);
-        }
-        setPhase('waiting');
-      }
-    } else if (phase === 'waiting') {
-      timer = setTimeout(() => {
-        setDisplayText('');
-        setPhase('typing');
-      }, TRANSITION_DELAY);
-    }
-
-    return () => clearTimeout(timer);
-  }, [displayText, phase, fullWord, cursor]);
-
-  return (
-    <span className="inline-flex items-baseline">
-      <span>{displayText}</span>
-      <span className="text-text-tertiary">...</span>
-    </span>
-  );
-}
 
 /** Activity indicator with elapsed time and token count */
 function ActivityIndicator({ activityStatus, sessionMeta }: {
@@ -281,14 +208,10 @@ function ActivityIndicator({ activityStatus, sessionMeta }: {
     && !!elapsed
     && (now - sessionMeta.lastProgressAt) > 120_000;
 
-  const isThinking = activityStatus.phase === 'thinking';
-
   return (
     <div className="flex items-center gap-1.5 py-1">
-      <span className={`text-sm font-medium leading-none text-accent
-        ${isThinking ? '' : 'animate-pulse-soft'}`}>/</span>
       <span className="text-sm text-text-muted">
-        {isThinking ? <CyclingThinkingText /> : phaseText}
+        {phaseText}
         {statsText && (
           <span className={`ml-1.5 ${stallWarning ? 'text-red-400' : 'text-text-tertiary'}`}>{statsText}</span>
         )}
@@ -363,7 +286,7 @@ function ContextMeter({ sessionMeta, tabId, sessionStatus }: {
     } catch (e) {
       store.setSessionMeta(tabId, { pendingCommandMsgId: undefined });
       store.setSessionStatus(tabId, 'error');
-      console.warn('[TOKENICODE] manual compact failed:', e);
+      console.warn('[MY-CODE] manual compact failed:', e);
     } finally {
       setIsCompacting(false);
     }
@@ -371,7 +294,7 @@ function ContextMeter({ sessionMeta, tabId, sessionStatus }: {
 
   return (
     <div className="hidden md:flex items-center gap-2 ml-2 px-2 py-1 rounded-lg
-      bg-bg-secondary/60 border border-border-subtle text-[10px] text-text-tertiary"
+      bg-bg-secondary/60 border border-border-subtle text-[11px] text-text-tertiary"
       title={`Actual model: ${displayDeepSeekModelName(modelForContext)}; context used ${used.toLocaleString()} / ${contextWindow.toLocaleString()}; available ${available.toLocaleString()}; auto compact at ${compactThreshold.toLocaleString()}`}>
       <span className="font-medium text-text-muted">Ctx</span>
       <div className="w-20 h-1.5 rounded-full bg-bg-tertiary overflow-hidden">
@@ -506,8 +429,8 @@ export function ChatPanel() {
       useSettingsStore.getState().setSecondaryTab('files');
       useFileStore.getState().selectFile(filePath);
     };
-    window.addEventListener('tokenicode:open-file', onOpenFile);
-    return () => window.removeEventListener('tokenicode:open-file', onOpenFile);
+    window.addEventListener('mycode:open-file', onOpenFile);
+    return () => window.removeEventListener('mycode:open-file', onOpenFile);
   }, []);
 
   // --- Tool grouping: group 3+ consecutive tool_use messages ---
@@ -663,9 +586,9 @@ export function ChatPanel() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Top Bar — with extra top padding for macOS traffic lights */}
+      {/* Top Bar */}
       <div
-        className="flex items-center h-[68px] pt-[20px] px-5 border-b border-border-subtle
+        className="flex items-center h-[44px] pt-0 px-4 border-b border-border-subtle
         flex-shrink-0 bg-bg-chat cursor-default">
         {/* Show sidebar toggle when sidebar is not visible:
             either user closed it, or it's hidden by file preview mode */}
@@ -699,12 +622,12 @@ export function ChatPanel() {
           {/* Agent status — clickable dot + label → opens AgentPanel */}
           <button onClick={toggleAgentPanel}
             className={`flex items-center gap-1.5 px-1.5 py-0.5 rounded-lg
-              transition-smooth text-[9px]
+              transition-smooth text-[11px]
               ${agentPanelOpen ? 'bg-accent/10' : 'hover:bg-bg-secondary/50'}`}
             title={t('agents.toggle')}>
             <span className={`w-[6px] h-[6px] rounded-full flex-shrink-0 transition-smooth
               ${activeAgentCount > 0
-                ? 'bg-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.5)] animate-pulse-soft'
+                ? 'bg-amber-400'
                 : totalAgentCount > 0
                   ? 'bg-success'
                   : 'bg-text-tertiary/30'}`} />
@@ -714,10 +637,10 @@ export function ChatPanel() {
           </button>
 
           {/* API route status — dot + label */}
-          <div className="flex items-center gap-1.5 text-[9px]">
+          <div className="flex items-center gap-1.5 text-[11px]">
             <span className={`w-[6px] h-[6px] rounded-full flex-shrink-0 transition-smooth
               ${sessionStatus === 'running'
-                ? 'bg-success shadow-[0_0_6px_var(--color-accent-glow)] animate-pulse-soft'
+                ? 'bg-success'
                 : sessionStatus === 'error'
                   ? 'bg-error'
                   : 'bg-text-tertiary/30'}`} />
@@ -727,7 +650,7 @@ export function ChatPanel() {
           </div>
 
           {/* Current session mode indicator */}
-          <div className={`flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded
+          <div className={`flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded
             ${sessionMode === 'bypass'
               ? 'text-warning/80'
               : 'text-text-tertiary'}`}>
@@ -770,7 +693,7 @@ export function ChatPanel() {
       <div className="flex flex-1 min-h-0 relative">
       {/* Main chat area */}
       <div className="flex flex-col flex-1 min-w-0">
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-5 py-6 selectable chat-scroll-container">
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-6 selectable chat-scroll-container">
         {!workingDirectory && messages.length === 0 && !isStreaming ? (
           <WelcomeScreen />
         ) : messages.length === 0 && !isStreaming ? (
@@ -834,8 +757,7 @@ export function ChatPanel() {
                       <path d="M3 2l4 3-4 3" />
                     </svg>
                     {t('msg.thinking')}
-                    <span className="inline-block w-1.5 h-3 bg-text-tertiary ml-0.5
-                      animate-pulse-soft rounded-sm" />
+                    <span className="inline-block w-1.5 h-3 bg-accent/50 ml-0.5 rounded-sm" />
                   </summary>
                   <pre ref={thinkingPreRef} className="ml-5 mt-0.5 text-[11px] text-text-tertiary
                     whitespace-pre-wrap max-h-48 overflow-y-auto
@@ -877,8 +799,7 @@ export function ChatPanel() {
                 )}
                 <div className="flex-1 min-w-0 text-base text-text-primary leading-relaxed">
                   <MarkdownRenderer content={partialText} />
-                  <span className="inline-block w-2 h-5 bg-accent ml-0.5
-                    animate-pulse-soft rounded-sm shadow-[0_0_8px_var(--color-accent-glow)]" />
+                  <span className="inline-block w-1.5 h-4 bg-accent/60 ml-0.5 rounded-sm" />
                 </div>
               </div>
               );
@@ -997,7 +918,7 @@ async function startDraftSession(folderPath: string) {
         // Replay any events that arrived while handler was briefly null (React effect cycle)
         const queue: any[] = (window as any).__claudeStreamQueue;
         if (queue && queue.length > 0) {
-          console.warn(`[TOKENICODE] replaying ${queue.length} queued pre-warm events`);
+          console.warn(`[MY-CODE] replaying ${queue.length} queued pre-warm events`);
           const pending = queue.splice(0);
           for (const queued of pending) handler(queued);
         }
@@ -1006,12 +927,12 @@ async function startDraftSession(folderPath: string) {
         // Handler not yet available (InputBar not mounted or React effect cycle) — queue the event
         if (!(window as any).__claudeStreamQueue) (window as any).__claudeStreamQueue = [];
         (window as any).__claudeStreamQueue.push(msg);
-        console.warn('[TOKENICODE] pre-warm event queued (handler not ready):', msg.type);
+        console.warn('[MY-CODE] pre-warm event queued (handler not ready):', msg.type);
       }
     });
     const unlistenStderr = await onClaudeStderr(preWarmId, (line: string) => {
       // Log pre-warm stderr for debugging (errors here explain why CLI may fail)
-      console.warn('[TOKENICODE] pre-warm stderr:', line);
+      console.warn('[MY-CODE] pre-warm stderr:', line);
     });
 
     // Store unlisten per stdinId for multi-session support

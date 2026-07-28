@@ -114,13 +114,13 @@ export function ConversationList() {
   // Pinned & archived (Phase 3)
   const [pinnedSessions, setPinnedSessions] = useState<Set<string>>(() => {
     try {
-      const data = localStorage.getItem('tokenicode_pinned_sessions');
+      const data = localStorage.getItem('mycode_pinned_sessions');
       return new Set(data ? JSON.parse(data) : []);
     } catch { return new Set(); }
   });
   const [archivedSessions, setArchivedSessions] = useState<Set<string>>(() => {
     try {
-      const data = localStorage.getItem('tokenicode_archived_sessions');
+      const data = localStorage.getItem('mycode_archived_sessions');
       return new Set(data ? JSON.parse(data) : []);
     } catch { return new Set(); }
   });
@@ -146,13 +146,13 @@ export function ConversationList() {
   // Persist pinned/archived
   const persistPinned = useCallback((next: Set<string>) => {
     setPinnedSessions(next);
-    localStorage.setItem('tokenicode_pinned_sessions', JSON.stringify([...next]));
+    localStorage.setItem('mycode_pinned_sessions', JSON.stringify([...next]));
     bridge.savePinnedSessions([...next]).catch(() => {});
   }, []);
 
   const persistArchived = useCallback((next: Set<string>) => {
     setArchivedSessions(next);
-    localStorage.setItem('tokenicode_archived_sessions', JSON.stringify([...next]));
+    localStorage.setItem('mycode_archived_sessions', JSON.stringify([...next]));
     bridge.saveArchivedSessions([...next]).catch(() => {});
   }, []);
 
@@ -589,9 +589,9 @@ export function ConversationList() {
   }, []);
 
   return (
-    <div className="flex flex-col gap-1 px-3">
+    <div className="flex flex-col gap-1 px-2">
       {/* Search + Filters */}
-      <div className="px-1 mb-2">
+      <div className="px-0.5 mb-2">
         <div className="flex items-center gap-2">
           <div className="flex-1 min-w-0 flex items-center gap-2 px-3 py-2 rounded-xl
             bg-bg-secondary border border-border-subtle
@@ -626,7 +626,7 @@ export function ConversationList() {
           {/* Archive toggle */}
           <button
             onClick={() => setShowArchived(!showArchived)}
-            className={`flex-shrink-0 p-2 rounded-lg transition-smooth
+            className={`flex-shrink-0 p-1 rounded-lg transition-smooth flex items-center justify-center
               ${showArchived
                 ? 'bg-accent/10 text-accent'
                 : 'text-text-tertiary hover:bg-bg-secondary hover:text-text-primary'

@@ -1,13 +1,13 @@
 [package]
-name = "tokenicode"
+name = "mycode"
 version = "1.0.1"
-description = "TOKENICODE DeepSeek Alpha - a DeepSeek/CC Switch focused TOKENICODE fork"
+description = "MY-CODE DeepSeek Alpha - a DeepSeek/CC Switch focused MY-CODE fork"
 authors = ["TinyZ"]
 license = "Apache-2.0"
 edition = "2021"
 
 [lib]
-name = "tokenicode_lib"
+name = "mycode_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

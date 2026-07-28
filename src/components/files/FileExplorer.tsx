@@ -13,17 +13,12 @@ import { FileIcon } from '../shared/FileIcon';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { showToast } from '../shared/Toast';
 
-function getChangeBadge(kind: FileChangeKind | undefined) {
+function getChangeLabel(kind: FileChangeKind | undefined) {
   if (!kind) return null;
-  const colors = {
-    created: 'bg-success',
-    modified: 'bg-success',
-    removed: 'bg-error',
-  };
-  const labels = { created: 'A', modified: 'M', removed: 'D' };
+  const labels: Record<string, string> = { created: '新增', modified: '已修改', removed: '已删除' };
+  const colors: Record<string, string> = { created: 'text-success', modified: 'text-accent', removed: 'text-error' };
   return (
-    <span className={`ml-auto flex-shrink-0 w-4 h-4 rounded text-[9px]
-      font-bold text-text-inverse flex items-center justify-center ${colors[kind]}`}>
+    <span className={`text-[10px] ${colors[kind]}`}>
       {labels[kind]}
     </span>
   );
@@ -244,27 +239,27 @@ function SearchResultItem({
   const selectFile = useFileStore((s) => s.selectFile);
   const changeKind = useFileStore((s) => s.changedFiles.get(node.path));
   const isSelected = selectedFile === node.path;
+  const changeLabel = getChangeLabel(changeKind);
   return (
     <button
       onClick={() => { if (!node.is_dir) selectFile(node.path); }}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu(e, node.path, node.is_dir); }}
-      className={`w-full flex items-center gap-2 py-1.5 px-3 rounded-lg
-        text-left text-[13px] transition-smooth group
+      className={`w-full py-1 px-3 rounded-lg text-left text-[13px] transition-smooth group
         ${isSelected
           ? 'bg-accent/10 text-accent'
-          : changeKind
-            ? 'text-success'
-            : 'text-text-muted hover:bg-bg-secondary hover:text-text-primary'
+          : 'text-text-muted hover:bg-bg-secondary hover:text-text-primary'
         }`}
     >
-      <FileIcon name={node.name} isDir={node.is_dir} size={14} className="flex-shrink-0" />
-      <span className="truncate">{node.name}</span>
-      {relDir && (
-        <span className="ml-auto text-xs text-text-tertiary truncate max-w-[40%] flex-shrink-0">
-          {relDir}
-        </span>
-      )}
-      {getChangeBadge(changeKind)}
+      <div className="flex items-center gap-2">
+        <FileIcon name={node.name} isDir={node.is_dir} size={14} className="flex-shrink-0" />
+        <span className="truncate">{node.name}</span>
+        {relDir && (
+          <span className="ml-auto text-xs text-text-tertiary truncate max-w-[40%] flex-shrink-0">
+            {relDir}
+          </span>
+        )}
+      </div>
+      {changeLabel && <div className="mt-0.5 ml-5">{changeLabel}</div>}
     </button>
   );
 }
@@ -312,6 +307,7 @@ function TreeNode({
   );
   const isSelected = selectedFile === node.path;
 
+  const changeLabel = getChangeLabel(changeKind);
   const isExpanded = expanded;
 
   const handleClick = () => {
@@ -370,7 +366,7 @@ function TreeNode({
                 } else if (!result.droppedInTree) {
                   // Drop outside file tree → insert file chip in chat
                   window.dispatchEvent(
-                    new CustomEvent('tokenicode:tree-file-inline', { detail: result.sourcePath }),
+                    new CustomEvent('mycode:tree-file-inline', { detail: result.sourcePath }),
                   );
                 }
               }
@@ -424,12 +420,15 @@ function TreeNode({
         ) : (
           <span className="truncate">{node.name}</span>
         )}
-        {getChangeBadge(changeKind)}
         {!changeKind && hasChildChanges && (
-          <span className="ml-auto w-1.5 h-1.5 rounded-full bg-success
-            flex-shrink-0" />
+          <span className="ml-auto w-1.5 h-1.5 rounded-full bg-success flex-shrink-0" />
         )}
       </button>
+      {changeLabel && (
+        <div className="mt-0.5" style={{ paddingLeft: `${depth * 16 + 28}px` }}>
+          {changeLabel}
+        </div>
+      )}
       {node.is_dir && isExpanded && node.children && (
         <div>
           {creatingIn?.dir === node.path && (

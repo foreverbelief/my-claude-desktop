@@ -41,11 +41,11 @@ function levelFor(value: number, max: number): number {
 
 function heatColor(level: number): string {
   switch (level) {
-    case 4: return '#e98d82';
-    case 3: return '#f2aaa0';
-    case 2: return '#f6c8b8';
-    case 1: return '#f7ded0';
-    default: return 'rgba(188, 144, 123, 0.13)';
+    case 4: return 'var(--color-accent)';
+    case 3: return 'color-mix(in srgb, var(--color-accent) 72%, transparent)';
+    case 2: return 'color-mix(in srgb, var(--color-accent) 42%, transparent)';
+    case 1: return 'color-mix(in srgb, var(--color-accent) 18%, transparent)';
+    default: return 'color-mix(in srgb, var(--color-accent) 7%, transparent)';
   }
 }
 
@@ -128,7 +128,7 @@ export function ProfileStatsModal({ open, onClose }: Props) {
   }, [dailyMap]);
 
   const maxWeek = Math.max(...weekly.map((w) => w.tokens), 1);
-  const displayName = userDisplayName.trim() || 'TOKEN/CODE 用户';
+  const displayName = userDisplayName.trim() || 'MY-CODE';
 
   if (!open) return null;
 
@@ -159,11 +159,16 @@ export function ProfileStatsModal({ open, onClose }: Props) {
               {userAvatarUrl ? (
                 <img src={userAvatarUrl} alt="" className="w-full h-full object-cover" />
               ) : (
-                <img src="/app-icon.png" alt="" className="w-full h-full object-cover" />
+                <svg width="80" height="80" viewBox="0 0 32 32" fill="none"
+                  className="w-full h-full object-cover">
+                  <rect width="32" height="32" rx="8" fill="#18181b"/>
+                  <path d="M9 21V11l5.5 5.5L20 11v10" stroke="white" strokeWidth="2"
+                    strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
               )}
             </div>
             <h2 className="mt-4 text-[28px] font-semibold text-text-primary">{displayName}</h2>
-            <p className="mt-1 text-sm text-text-muted">本机 TOKENICODE 使用汇总</p>
+            <p className="mt-1 text-sm text-text-muted">本机 MY-CODE 使用汇总</p>
           </div>
 
           {loading && (

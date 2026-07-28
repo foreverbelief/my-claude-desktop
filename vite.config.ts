@@ -13,7 +13,7 @@ export default defineConfig(async () => ({
 
   define: {
     __APP_EDITION__: JSON.stringify(edition),
-    __APP_NAME__: JSON.stringify(edition === 'alpha' ? 'TOKENICODE DeepSeek Alpha' : 'TOKENICODE'),
+    __APP_NAME__: JSON.stringify(edition === 'alpha' ? 'MY-CODE Alpha' : 'MY-CODE'),
   },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`

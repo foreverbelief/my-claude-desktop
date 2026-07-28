@@ -11,8 +11,8 @@ import {
 // --- Types ---
 
 export type Theme = 'light' | 'dark' | 'system';
-export type ColorTheme = 'black' | 'blue' | 'orange' | 'green';
-export type BackgroundTheme = 'garden' | 'sakura' | 'lake' | 'dusk' | 'ink' | 'vscode' | 'minimal';
+export type ColorTheme = 'black' | 'blue';
+export type BackgroundTheme = 'white' | 'black';
 export type SecondaryPanelTab = 'files' | 'preview' | 'skills' | 'plugins';
 export type ModelId = 'claude-opus-4-6' | 'claude-opus-4-6-1m' | 'claude-sonnet-4-6' | 'claude-haiku-4-5-20251001';
 export type SessionMode = 'code' | 'ask' | 'plan' | 'bypass';
@@ -185,7 +185,7 @@ export const useSettingsStore = create<SettingsState>()(
     (set) => ({
       theme: 'system',
       colorTheme: 'black',
-      backgroundTheme: 'garden',
+      backgroundTheme: 'white',
       sidebarOpen: true,
       secondaryPanelOpen: false,
       secondaryPanelTab: 'files',
@@ -199,7 +199,7 @@ export const useSettingsStore = create<SettingsState>()(
       fontSize: 18,
       fontFamily: 'microsoft',
       monoFontFollowsInterface: true,
-      sidebarWidth: 280,
+      sidebarWidth: 260,
       setupCompleted: false,
       thinkingLevel: 'medium' as ThinkingLevel,
       contextWindowMode: 'default',
@@ -343,7 +343,7 @@ export const useSettingsStore = create<SettingsState>()(
         set((state) => ({ showHiddenFiles: !state.showHiddenFiles })),
     }),
     {
-      name: 'tokenicode-settings',
+      name: 'mycode-settings',
       version: 12,
       migrate: (persistedState: unknown, version: number) => {
         const persisted = persistedState as Record<string, unknown>;
@@ -394,7 +394,7 @@ export const useSettingsStore = create<SettingsState>()(
           }
         }
         if (version < 8) {
-          persisted.backgroundTheme = 'garden';
+          persisted.backgroundTheme = 'white';
         }
         if (version < 9) {
           persisted.monoFontFollowsInterface = true;
@@ -522,7 +522,7 @@ useSettingsStore.subscribe((state, prevState) => {
     if (!stdinId) return; // No active session
 
     bridge.setPermissionMode(stdinId, cliMode).catch((err: unknown) => {
-      console.error('[TOKENICODE] Failed to set permission mode:', err);
+      console.error('[MY-CODE] Failed to set permission mode:', err);
     });
   });
 });

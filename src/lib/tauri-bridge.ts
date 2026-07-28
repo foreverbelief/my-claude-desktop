@@ -543,21 +543,21 @@ export const bridge = {
   openTerminalLogin: () =>
     invoke<void>('open_terminal_login'),
 
-  // Session custom names (persisted to ~/.claude/tokenicode_session_names.json)
+  // Session custom names (persisted to ~/.claude/mycode_session_names.json)
   loadCustomPreviews: () =>
     invoke<Record<string, string>>('load_custom_previews'),
 
   saveCustomPreviews: (data: Record<string, string>) =>
     invoke<void>('save_custom_previews', { data }),
 
-  // Pinned sessions (persisted to ~/.tokenicode/pinned.json)
+  // Pinned sessions (persisted to ~/.my-code/pinned.json)
   loadPinnedSessions: () =>
     invoke<string[]>('load_pinned_sessions').catch(() => []),
 
   savePinnedSessions: (data: string[]) =>
     invoke<void>('save_pinned_sessions', { data }).catch(() => {}),
 
-  // Archived sessions (persisted to ~/.tokenicode/archived.json)
+  // Archived sessions (persisted to ~/.my-code/archived.json)
   loadArchivedSessions: () =>
     invoke<string[]>('load_archived_sessions').catch(() => []),
 

@@ -1,10 +1,10 @@
 {
-  "productName": "TOKENICODE DeepSeek Alpha",
+  "productName": "MY-CODE DeepSeek Alpha",
   "identifier": "com.tinyzhuang.tcalpha",
   "app": {
     "windows": [
       {
-        "title": "TOKENICODE DeepSeek Alpha",
+        "title": "MY-CODE DeepSeek Alpha",
         "width": 1280,
         "height": 800,
         "minWidth": 900,

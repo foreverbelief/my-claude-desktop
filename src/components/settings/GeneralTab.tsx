@@ -36,62 +36,22 @@ const COLOR_THEMES: { id: ColorTheme; labelKey: string; preview: string; preview
     preview: '#4E80F7',
     previewDark: '#6B9AFF',
   },
-  {
-    id: 'orange',
-    labelKey: 'settings.orange',
-    preview: '#C47252',
-    previewDark: '#D4856A',
-  },
-  {
-    id: 'green',
-    labelKey: 'settings.green',
-    preview: '#57A64B',
-    previewDark: '#6DBF62',
-  },
 ];
 
-const BACKGROUND_THEMES: { id: BackgroundTheme; label: string; accent: string; preview: string }[] = [
+const BACKGROUND_THEMES: { id: BackgroundTheme; label: string; accent: string; sidebar: string; main: string }[] = [
   {
-    id: 'garden',
-    label: '花园',
-    accent: '#D9857A',
-    preview: 'radial-gradient(circle at 15% 90%, #AFCB8C 0 18%, transparent 20%), linear-gradient(135deg, #FFF8EA, #F7D9C6)',
-  },
-  {
-    id: 'sakura',
-    label: '粉樱',
-    accent: '#C97D98',
-    preview: 'radial-gradient(circle at 85% 18%, #F2B7C9 0 20%, transparent 22%), linear-gradient(135deg, #FFF4F7, #F7E6CF)',
-  },
-  {
-    id: 'lake',
-    label: '湖蓝',
-    accent: '#6D9CB8',
-    preview: 'radial-gradient(circle at 15% 85%, #A9CFBF 0 18%, transparent 20%), linear-gradient(135deg, #F3FBF8, #DCEEF4)',
-  },
-  {
-    id: 'dusk',
-    label: '暮紫',
-    accent: '#9A83B8',
-    preview: 'radial-gradient(circle at 82% 18%, #D8B6C9 0 20%, transparent 22%), linear-gradient(135deg, #F7F1FB, #E9DFD1)',
-  },
-  {
-    id: 'ink',
-    label: '墨纸',
-    accent: '#7E8792',
-    preview: 'radial-gradient(circle at 18% 90%, #C4CABA 0 18%, transparent 20%), linear-gradient(135deg, #F8F5EC, #E6E2D5)',
-  },
-  {
-    id: 'vscode',
-    label: 'VS Code Dark',
-    accent: '#007ACC',
-    preview: 'linear-gradient(90deg, #252526 0 24%, #1E1E1E 24% 100%)',
-  },
-  {
-    id: 'minimal',
-    label: '纯白简约',
+    id: 'white',
+    label: '简约白',
     accent: '#111827',
-    preview: 'linear-gradient(90deg, #F7F7F8 0 24%, #FFFFFF 24% 100%)',
+    sidebar: '#F7F7F8',
+    main: '#FFFFFF',
+  },
+  {
+    id: 'black',
+    label: '简约黑',
+    accent: '#6B9AFF',
+    sidebar: '#1C1C1E',
+    main: '#141414',
   },
 ];
 
@@ -107,34 +67,6 @@ const CONTEXT_WINDOW_OPTIONS: { id: ContextWindowMode; label: string; hint: stri
   { id: 'default', label: '标准 200K', hint: '自动 compact 阈值 160K' },
   { id: 'large1m', label: '声明 1M', hint: '自动 compact 阈值 800K' },
 ];
-
-/* Mini app preview — simplified chat interface thumbnail */
-function ThemePreview({ color }: { color: string }) {
-  return (
-    <div className="w-full aspect-[5/3] rounded-lg overflow-hidden border border-black/[0.06] bg-[#f5f5f5] dark:bg-[#1a1a1a] dark:border-white/[0.06] flex">
-      {/* Sidebar */}
-      <div className="w-[22%] border-r border-black/[0.06] dark:border-white/[0.06] p-2 flex flex-col gap-1.5">
-        <div className="w-full h-2 rounded-full bg-black/[0.07] dark:bg-white/[0.08]" />
-        <div className="w-[80%] h-2 rounded-full" style={{ background: color, opacity: 0.3 }} />
-        <div className="w-[60%] h-2 rounded-full bg-black/[0.05] dark:bg-white/[0.06]" />
-      </div>
-      {/* Main content */}
-      <div className="flex-1 flex flex-col p-2.5 gap-2">
-        {/* Messages */}
-        <div className="flex-1 flex flex-col gap-1.5 justify-center">
-          <div className="w-[65%] h-2.5 rounded bg-black/[0.06] dark:bg-white/[0.07]" />
-          <div className="w-[45%] h-2.5 rounded bg-black/[0.06] dark:bg-white/[0.07]" />
-          <div className="w-[75%] h-2.5 rounded bg-black/[0.04] dark:bg-white/[0.05] self-end" />
-        </div>
-        {/* Input bar */}
-        <div className="flex items-center gap-1">
-          <div className="flex-1 h-3.5 rounded bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.06] dark:border-white/[0.08]" />
-          <div className="w-3.5 h-3.5 rounded flex-shrink-0" style={{ background: color }} />
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export function GeneralTab() {
   const t = useT();
@@ -278,52 +210,56 @@ export function GeneralTab() {
         />
       )}
 
-      {/* Theme Color — single row of 4 */}
+      {/* Theme Color — compact swatches */}
       <div>
         <h3 className="text-[13px] font-medium text-text-primary mb-3">{t('settings.colorTheme')}</h3>
-        <div className="grid grid-cols-4 gap-3">
+        <div className="flex gap-3">
           {COLOR_THEMES.map((ct) => (
             <button
               key={ct.id}
               onClick={() => setColorTheme(ct.id)}
               title={t(ct.labelKey)}
-              className={`group relative rounded-xl p-2 transition-smooth text-left
+              className={`group relative flex items-center gap-2.5 rounded-xl px-3 py-2.5 transition-smooth
                 ${colorTheme === ct.id
-                  ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg-card bg-accent/[0.03]'
-                  : 'hover:scale-[1.02] border border-border-subtle hover:border-black/10 dark:hover:border-white/10'
+                  ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg-card bg-accent/[0.04]'
+                  : 'border border-border-subtle hover:border-black/10 dark:hover:border-white/10'
                 }`}
             >
-              <ThemePreview color={ct.preview} />
+              <div className="flex gap-1">
+                <div className="w-7 h-7 rounded-lg border border-black/[0.06]"
+                  style={{ background: ct.preview }} />
+                <div className="w-7 h-7 rounded-lg border border-white/[0.06] bg-[#1a1a1a]"
+                  style={{ background: ct.previewDark }} />
+              </div>
+              <span className="text-[12px] font-medium text-text-muted">{t(ct.labelKey)}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Background Skin */}
+      {/* Background Skin — compact color blocks */}
       <div>
         <h3 className="text-[13px] font-medium text-text-primary mb-3">背景风格</h3>
-        <div className="grid grid-cols-5 gap-3">
+        <div className="flex gap-3">
           {BACKGROUND_THEMES.map((bg) => (
             <button
               key={bg.id}
               onClick={() => setBackgroundTheme(bg.id)}
               title={bg.label}
-              className={`group relative rounded-xl p-2 transition-smooth text-left
+              className={`group relative flex items-center gap-2.5 rounded-xl px-3 py-2.5 transition-smooth
                 ${backgroundTheme === bg.id
-                  ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg-card bg-accent/[0.03]'
-                  : 'hover:scale-[1.02] border border-border-subtle hover:border-black/10 dark:hover:border-white/10'
+                  ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg-card bg-accent/[0.04]'
+                  : 'border border-border-subtle hover:border-black/10 dark:hover:border-white/10'
                 }`}
             >
-              <div className="w-full aspect-[5/3] rounded-lg overflow-hidden border border-black/[0.06] relative"
-                style={{ background: bg.preview }}>
-                <div className="absolute inset-x-2 top-2 h-2 rounded-full bg-white/45" />
-                <div className="absolute left-2 bottom-2 w-10 h-5 rounded-md bg-white/45" />
-                <div className="absolute right-2 bottom-2 w-5 h-5 rounded-md"
-                  style={{ background: bg.accent }} />
+              <div className="flex rounded-md overflow-hidden border border-black/[0.08] dark:border-white/[0.08] h-7 w-11">
+                <div className="w-[30%]" style={{ background: bg.sidebar }} />
+                <div className="flex-1 relative" style={{ background: bg.main }}>
+                  <div className="absolute right-0.5 bottom-0.5 w-2.5 h-2.5 rounded-sm"
+                    style={{ background: bg.accent }} />
+                </div>
               </div>
-              <div className="mt-2 text-center text-[12px] font-medium text-text-muted">
-                {bg.label}
-              </div>
+              <span className="text-[12px] font-medium text-text-muted">{bg.label}</span>
             </button>
           ))}
         </div>
@@ -429,11 +365,11 @@ export function GeneralTab() {
             className="mt-2 inline-flex items-center gap-2 text-[12px] text-text-secondary
               hover:text-text-primary transition-smooth"
           >
-            <span className={`relative w-8 h-4 rounded-full transition-smooth
-              ${monoFontFollowsInterface ? 'bg-accent/80' : 'bg-bg-tertiary border border-border-subtle'}`}
+            <span className={`relative inline-flex w-9 h-5 items-center rounded-full transition-colors duration-200
+              ${monoFontFollowsInterface ? 'bg-accent' : 'bg-bg-tertiary border border-border-subtle'}`}
             >
-              <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow-sm transition-transform
-                ${monoFontFollowsInterface ? 'translate-x-4' : 'translate-x-0.5'}`}
+              <span className={`inline-block w-3.5 h-3.5 rounded-full bg-white shadow-sm transition-transform duration-200
+                ${monoFontFollowsInterface ? 'translate-x-[18px]' : 'translate-x-[2px]'}`}
               />
             </span>
             {t('settings.monoFontFollowsInterface')}

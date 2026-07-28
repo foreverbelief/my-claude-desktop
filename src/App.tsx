@@ -25,8 +25,6 @@ import './App.css';
 const THEME_ACCENT_COLORS: Record<ColorTheme, string> = {
   black: '#FFFFFF',
   blue: '#4E80F7',
-  orange: '#C47252',
-  green: '#57A64B',
 };
 
 const FONT_FAMILY_STACKS: Record<FontFamily, string> = {
@@ -154,7 +152,7 @@ function App() {
       const { stdinToTab } = useSessionStore.getState();
       const orphaned = activeIds.filter((id) => !stdinToTab[id]);
       for (const id of orphaned) {
-        console.log('[TOKENICODE:cleanup] killing orphaned process:', id);
+        console.log('[MY-CODE:cleanup] killing orphaned process:', id);
         bridge.killSession(id).catch(() => {});
       }
     }).catch(() => {});
@@ -166,7 +164,7 @@ function App() {
     const isMac = navigator.userAgent.includes('Mac');
     if (!isMac) return;
     // Skip if user previously dismissed the dialog
-    if (localStorage.getItem('tokenicode-perm-dismissed')) return;
+    if (localStorage.getItem('mycode-perm-dismissed')) return;
     bridge.checkFileAccess('/Users').then((ok) => {
       if (!ok) setShowPermDialog(true);
     }).catch(() => {});
@@ -235,13 +233,9 @@ function App() {
   // Apply color theme class to document
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.remove('theme-blue', 'theme-orange', 'theme-green');
+    root.classList.remove('theme-blue');
     if (colorTheme === 'blue') {
       root.classList.add('theme-blue');
-    } else if (colorTheme === 'orange') {
-      root.classList.add('theme-orange');
-    } else if (colorTheme === 'green') {
-      root.classList.add('theme-green');
     }
     // 'black' is the default — no class needed
   }, [colorTheme]);
@@ -249,7 +243,7 @@ function App() {
   // Apply watercolor background skin class to document
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.remove('bg-theme-garden', 'bg-theme-sakura', 'bg-theme-lake', 'bg-theme-dusk', 'bg-theme-ink', 'bg-theme-vscode', 'bg-theme-minimal');
+    root.classList.remove('bg-theme-white', 'bg-theme-black');
     root.classList.add(`bg-theme-${backgroundTheme}`);
   }, [backgroundTheme]);
 
@@ -288,7 +282,7 @@ function App() {
   // Apply font family to document root
   useEffect(() => {
     const stack = FONT_FAMILY_STACKS[fontFamily] || FONT_FAMILY_STACKS.microsoft;
-    document.documentElement.style.setProperty('--tokenicode-font-family', stack);
+    document.documentElement.style.setProperty('--mycode-font-family', stack);
   }, [fontFamily]);
 
   useEffect(() => {
@@ -462,7 +456,7 @@ function App() {
             <div className="px-6 py-4 flex items-center justify-end gap-2">
               <button
                 onClick={() => {
-                  localStorage.setItem('tokenicode-perm-dismissed', '1');
+                  localStorage.setItem('mycode-perm-dismissed', '1');
                   setShowPermDialog(false);
                 }}
                 className="px-4 py-2 rounded-lg text-xs font-medium
@@ -473,7 +467,7 @@ function App() {
               </button>
               <button
                 onClick={() => {
-                  localStorage.setItem('tokenicode-perm-dismissed', '1');
+                  localStorage.setItem('mycode-perm-dismissed', '1');
                   openUrl('x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles');
                   setShowPermDialog(false);
                 }}

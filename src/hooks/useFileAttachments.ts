@@ -294,7 +294,7 @@ export function useFileAttachments() {
 
           // Non-images → inline file chips
           for (const p of otherPaths) {
-            window.dispatchEvent(new CustomEvent('tokenicode:tree-file-inline', { detail: p }));
+            window.dispatchEvent(new CustomEvent('mycode:tree-file-inline', { detail: p }));
           }
         }
       }

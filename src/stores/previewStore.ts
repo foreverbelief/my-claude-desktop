@@ -93,7 +93,7 @@ export const usePreviewStore = create<PreviewState>()(
       setSnapshot: (snapshot) => set({ lastSnapshot: snapshot }),
     }),
     {
-      name: 'tokenicode-preview-store-v1',
+      name: 'mycode-preview-store-v1',
       partialize: (state) => ({
         url: state.url,
         history: state.history,

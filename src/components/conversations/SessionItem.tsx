@@ -157,7 +157,7 @@ export const SessionItem = memo(function SessionItem({
         startRename();
       }}
       onContextMenu={(e) => onContextMenu(e, session)}
-      className={`w-full text-left pl-7 pr-3 py-1.5 rounded-xl
+      className={`w-full text-left pl-7 pr-1 py-1.5 rounded-xl
         transition-smooth group conversation-list-item
         ${isArchived ? 'opacity-50' : ''}
         ${isSelected
@@ -239,9 +239,7 @@ export const SessionItem = memo(function SessionItem({
           </span>
         )}
         {isRunning && (
-          <span className="flex-shrink-0 w-2 h-2 rounded-full bg-success
-            shadow-[0_0_6px_var(--color-accent-glow)]
-            animate-pulse-soft" />
+          <span className="flex-shrink-0 w-2 h-2 rounded-full bg-success" />
         )}
       </div>
       {contentSnippet && (

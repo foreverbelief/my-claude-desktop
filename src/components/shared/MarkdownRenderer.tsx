@@ -3,6 +3,7 @@ import Markdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
+import 'katex/dist/katex.min.css';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { useLightboxStore } from './ImageLightbox';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -102,8 +103,7 @@ export function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="absolute top-2 right-2 px-2 py-1 rounded-md text-[10px]
-        font-medium opacity-0 group-hover:opacity-100 transition-smooth
+      className="px-2 py-0.5 rounded text-[10px] font-medium transition-smooth
         bg-bg-tertiary/80 text-text-muted hover:text-text-primary
         hover:bg-bg-tertiary border border-border-subtle"
     >
@@ -118,6 +118,27 @@ function extractText(node: ReactNode): string {
   if (Array.isArray(node)) return node.map(extractText).join('');
   if (node && typeof node === 'object' && 'props' in node) {
     return extractText((node as any).props.children);
+  }
+  return '';
+}
+
+/** Extract language from fenced code block children */
+function extractLanguage(children: ReactNode): string {
+  if (!children || typeof children === 'string' || typeof children === 'number') return '';
+  if (Array.isArray(children)) {
+    for (const child of children) {
+      const lang = extractLanguage(child);
+      if (lang) return lang;
+    }
+    return '';
+  }
+  if (typeof children === 'object' && 'props' in children) {
+    const props = (children as any).props;
+    if (props.className) {
+      const m = props.className.match(/language-(\w+)/);
+      if (m) return m[1];
+    }
+    return extractLanguage(props.children);
   }
   return '';
 }
@@ -186,12 +207,20 @@ interface Props {
   basePath?: string;
 }
 
-// Sanitize schema: GitHub defaults + className on all elements (needed for highlight.js)
+// MathML tags used by KaTeX — must be added to the sanitize allowlist
+const MATHML_TAGS = ['math', 'semantics', 'annotation', 'annotation-xml',
+  'mrow', 'mi', 'mo', 'mn', 'mtext', 'mspace', 'mfrac', 'msqrt', 'mroot',
+  'msup', 'msub', 'msubsup', 'munderover', 'munder', 'mover', 'mtable',
+  'mtr', 'mtd', 'mpadded', 'mphantom', 'menclose', 'mstyle', 'maction',
+  'merror', 'mprescripts', 'none', 'mlabeledtr', 'mmultiscripts'];
+
+// Sanitize schema: GitHub defaults + MathML + className/style on all elements
 const SANITIZE_SCHEMA = {
   ...defaultSchema,
+  tagNames: [...(defaultSchema.tagNames || []), ...MATHML_TAGS],
   attributes: {
     ...defaultSchema.attributes,
-    '*': [...(defaultSchema.attributes?.['*'] || []), 'className'],
+    '*': [...(defaultSchema.attributes?.['*'] || []), 'className', 'style'],
   },
   protocols: {
     ...defaultSchema.protocols,
@@ -202,16 +231,19 @@ const SANITIZE_SCHEMA = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type RemarkPlugin = any;
 
-const EMPTY_REMARK_PLUGINS: RemarkPlugin[] = [];
-let cachedRemarkPlugins: RemarkPlugin[] | null = null;
-let remarkPluginsPromise: Promise<RemarkPlugin[]> | null = null;
-let warnedAboutGfmFallback = false;
+interface PluginsBundle {
+  remark: RemarkPlugin[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  rehype: any[];
+}
+
+const FALLBACK_REHYPE: any[] = [rehypeRaw, [rehypeSanitize, SANITIZE_SCHEMA], rehypeHighlight];
+
+let cachedPlugins: PluginsBundle | null = null;
+let loadPromise: Promise<PluginsBundle> | null = null;
 
 function supportsRemarkGfmRegex(): boolean {
   try {
-    // remark-gfm's autolink-literal dependency uses this exact regex shape.
-    // Older WebKit parses `(?<=` as an invalid group specifier and crashes
-    // during module evaluation, so we gate the import on syntax support.
     void new RegExp(
       '(?<=^|\\s|\\p{P}|\\p{S})([-.\\w+]+)@([-\\w]+(?:\\.[-\\w]+)+)',
       'gu',
@@ -222,39 +254,47 @@ function supportsRemarkGfmRegex(): boolean {
   }
 }
 
-async function loadRemarkPlugins(): Promise<RemarkPlugin[]> {
-  if (cachedRemarkPlugins) return cachedRemarkPlugins;
+async function loadAllPlugins(): Promise<PluginsBundle> {
+  if (cachedPlugins) return cachedPlugins;
 
-  if (!supportsRemarkGfmRegex()) {
-    if (!warnedAboutGfmFallback) {
-      warnedAboutGfmFallback = true;
-      console.warn('[TOKENICODE] remark-gfm disabled: current JS runtime does not support its regex syntax');
-    }
-    cachedRemarkPlugins = EMPTY_REMARK_PLUGINS;
-    return cachedRemarkPlugins;
+  if (!loadPromise) {
+    loadPromise = (async () => {
+      const remark: RemarkPlugin[] = [];
+      const rehype: any[] = [rehypeRaw];
+
+      // remark-gfm + remark-cjk-friendly (gated on regex support)
+      if (supportsRemarkGfmRegex()) {
+        try {
+          const [gfmMod, cjkMod] = await Promise.all([
+            import('remark-gfm'),
+            import('remark-cjk-friendly'),
+          ]);
+          remark.push(gfmMod.default, cjkMod.default);
+        } catch (e) {
+          console.warn('[MY-CODE] failed to load remark-gfm/cjk', e);
+        }
+      }
+
+      // remark-math + rehype-katex (independent of gfm)
+      try {
+        const [mathMod, katexMod] = await Promise.all([
+          import('remark-math'),
+          import('rehype-katex'),
+        ]);
+        remark.push(mathMod.default);
+        rehype.push(katexMod.default);
+      } catch (e) {
+        console.warn('[MY-CODE] failed to load math/katex plugins', e);
+      }
+
+      rehype.push([rehypeSanitize, SANITIZE_SCHEMA], rehypeHighlight);
+      cachedPlugins = { remark, rehype };
+      return cachedPlugins;
+    })();
   }
 
-  if (!remarkPluginsPromise) {
-    remarkPluginsPromise = Promise.all([
-      import('remark-gfm'),
-      import('remark-cjk-friendly'),
-    ])
-      .then(([gfmMod, cjkMod]) => {
-        cachedRemarkPlugins = [gfmMod.default, cjkMod.default];
-        return cachedRemarkPlugins;
-      })
-      .catch((error) => {
-        console.warn('[TOKENICODE] failed to load remark plugins, falling back to basic markdown', error);
-        cachedRemarkPlugins = EMPTY_REMARK_PLUGINS;
-        return cachedRemarkPlugins;
-      });
-  }
-
-  return remarkPluginsPromise;
+  return loadPromise;
 }
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const REHYPE_PLUGINS: any[] = [rehypeRaw, [rehypeSanitize, SANITIZE_SCHEMA], rehypeHighlight];
 
 /** Error boundary scoped to a single markdown block.
  *  A malformed message (e.g. truncated table from rate-limit) crashes only
@@ -289,14 +329,18 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content, classN
   const t = useT();
   const workingDirectory = useSettingsStore((s) => s.workingDirectory);
   const resolveBase = basePath || workingDirectory || '';
-  const [remarkPlugins, setRemarkPlugins] = useState<RemarkPlugin[]>(() => cachedRemarkPlugins ?? EMPTY_REMARK_PLUGINS);
+  const [remarkPlugins, setRemarkPlugins] = useState<RemarkPlugin[]>(() => cachedPlugins?.remark ?? []);
+  const [rehypePlugins, setRehypePlugins] = useState<any[]>(() => cachedPlugins?.rehype ?? FALLBACK_REHYPE);
 
   useEffect(() => {
-    if (cachedRemarkPlugins !== null) return;
+    if (cachedPlugins !== null) return;
 
     let cancelled = false;
-    loadRemarkPlugins().then((plugins) => {
-      if (!cancelled) setRemarkPlugins(plugins);
+    loadAllPlugins().then((plugins) => {
+      if (!cancelled) {
+        setRemarkPlugins(plugins.remark);
+        setRehypePlugins(plugins.rehype);
+      }
     });
 
     return () => {
@@ -425,11 +469,14 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content, classN
     },
     pre: ({ children }: { children?: ReactNode }) => {
       const codeText = extractText(children);
+      const language = extractLanguage(children) || 'text';
       return (
-        <div className="relative group my-3">
-          <CopyButton text={codeText} />
-          <pre className="bg-bg-secondary rounded-xl p-4
-            border border-border-subtle overflow-x-auto">
+        <div className="my-3 rounded-xl border border-border-subtle overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-1.5 bg-bg-tertiary border-b border-border-subtle">
+            <span className="text-[11px] text-text-muted font-medium uppercase tracking-wide select-none">{language}</span>
+            <CopyButton text={codeText} />
+          </div>
+          <pre className="bg-bg-secondary p-4 overflow-x-auto m-0 rounded-b-xl">
             {children}
           </pre>
         </div>
@@ -477,7 +524,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content, classN
       <MarkdownErrorBoundary fallback={content}>
         <Markdown
           remarkPlugins={remarkPlugins}
-          rehypePlugins={REHYPE_PLUGINS}
+          rehypePlugins={rehypePlugins}
           components={components}
         >
           {processedContent}

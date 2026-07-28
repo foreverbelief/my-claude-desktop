@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { type ChatMessage, useChatStore, getActiveTabState } from '../../stores/chatStore';
 import { useSessionStore } from '../../stores/sessionStore';
 import { bridge } from '../../lib/tauri-bridge';
@@ -89,6 +89,54 @@ export function PermissionCard({ message }: Props) {
   const isFailed = interactionState === 'failed';
   const isPending = interactionState === 'pending';
 
+  // Keyboard navigation: 0 = allow, 1 = deny
+  const [selectedAction, setSelectedAction] = useState(0);
+  const allowBtnRef = useRef<HTMLButtonElement>(null);
+  const denyBtnRef = useRef<HTMLButtonElement>(null);
+  // Use refs so the keydown effect doesn't re-register on every state change
+  const selectedActionRef = useRef(selectedAction);
+  selectedActionRef.current = selectedAction;
+  const handleRespondRef = useRef(handleRespond);
+  handleRespondRef.current = handleRespond;
+
+  useEffect(() => {
+    if (!isPending) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      const key = e.key;
+      if (key === 'ArrowLeft' || key === 'ArrowUp') {
+        e.preventDefault();
+        e.stopPropagation();
+        setSelectedAction((p) => (p === 0 ? 1 : 0));
+      } else if (key === 'ArrowRight' || key === 'ArrowDown') {
+        e.preventDefault();
+        e.stopPropagation();
+        setSelectedAction((p) => (p === 0 ? 1 : 0));
+      } else if (key === 'Enter' && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleRespondRef.current(selectedActionRef.current === 0);
+      } else if (key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        handleRespondRef.current(false);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [isPending]);
+
+  // Focus the selected button
+  useEffect(() => {
+    if (!isPending) return;
+    if (selectedAction === 0) {
+      allowBtnRef.current?.focus();
+    } else {
+      denyBtnRef.current?.focus();
+    }
+  }, [isPending, selectedAction]);
+
   return (
     <div className={`ml-11 animate-scale-in ${isResolved ? 'opacity-60' : ''}`}>
       <div className={`rounded-xl border overflow-hidden transition-all duration-200
@@ -177,11 +225,15 @@ export function PermissionCard({ message }: Props) {
             {isPending && (
               <>
                 <button
+                  ref={allowBtnRef}
                   onClick={() => handleRespond(true)}
-                  className="px-4 py-2 rounded-lg text-xs font-semibold
-                    border-2 border-success/40 text-success bg-success/5
-                    hover:bg-success/15 transition-smooth cursor-pointer
-                    flex items-center gap-1.5"
+                  className={`px-4 py-2 rounded-lg text-xs font-semibold
+                    border-2 transition-smooth cursor-pointer
+                    flex items-center gap-1.5 outline-none
+                    ${selectedAction === 0
+                      ? 'border-success/70 text-success bg-success/15 ring-2 ring-success/20'
+                      : 'border-success/40 text-success bg-success/5 hover:bg-success/15'
+                    }`}
                 >
                   <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
                     stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -190,11 +242,14 @@ export function PermissionCard({ message }: Props) {
                   {t('msg.permissionAllowHint')}
                 </button>
                 <button
+                  ref={denyBtnRef}
                   onClick={() => handleRespond(false)}
-                  className="px-3 py-2 rounded-lg text-xs font-medium
-                    text-text-muted border border-border-subtle
-                    hover:bg-bg-secondary hover:text-text-primary
-                    transition-smooth cursor-pointer"
+                  className={`px-3 py-2 rounded-lg text-xs font-medium
+                    transition-smooth cursor-pointer outline-none
+                    ${selectedAction === 1
+                      ? 'border border-text-muted text-text-primary bg-bg-secondary ring-2 ring-text-muted/20'
+                      : 'border border-border-subtle text-text-muted hover:bg-bg-secondary hover:text-text-primary'
+                    }`}
                 >
                   {t('msg.permissionDenyHint')}
                 </button>

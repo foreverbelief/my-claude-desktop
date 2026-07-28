@@ -3,9 +3,9 @@ import { bridge, SessionListItem, ContentSearchResult } from '../lib/tauri-bridg
 
 // Persist custom session names in localStorage as fast cache,
 // and sync to disk via Tauri backend for durability.
-const CUSTOM_PREVIEWS_KEY = 'tokenicode_custom_previews';
-const LAST_SESSION_KEY = 'tokenicode_last_session';
-const STDIN_TO_TAB_KEY = 'tokenicode_stdinToTab';
+const CUSTOM_PREVIEWS_KEY = 'mycode_custom_previews';
+const LAST_SESSION_KEY = 'mycode_last_session';
+const STDIN_TO_TAB_KEY = 'mycode_stdinToTab';
 
 function loadCustomPreviewsSync(): Record<string, string> {
   try {

@@ -32,7 +32,7 @@ export function PreviewPanel() {
   }, [url, reloadToken]);
 
   useEffect(() => {
-    const unlistenPromise = listen<PreviewCommand>('tokenicode-preview-command', (event) => {
+    const unlistenPromise = listen<PreviewCommand>('mycode-preview-command', (event) => {
       const command = event.payload;
       setSecondaryTab('preview');
       if (command.type === 'open') openUrl(command.url);

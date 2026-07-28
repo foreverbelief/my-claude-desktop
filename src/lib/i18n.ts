@@ -10,7 +10,7 @@ const messages: Record<Locale, Record<string, string>> = {
     // Common
     'common.cancel': '取消',
     'common.confirm': '确认',
-    'confirm.exit': '确定要退出 TOKENICODE 吗？正在运行的任务将被终止。',
+    'confirm.exit': '确定要退出 MY-CODE 吗？正在运行的任务将被终止。',
 
     // Sidebar
     'sidebar.hide': '收起侧栏',
@@ -118,6 +118,7 @@ const messages: Record<Locale, Record<string, string>> = {
     'panel.preview': '预览',
     'panel.skills': '技能',
     'panel.plugins': '插件',
+    'panel.terminal': '终端',
     'panel.close': '关闭面板',
 
     // PreviewPanel
@@ -724,7 +725,7 @@ const messages: Record<Locale, Record<string, string>> = {
     // Common
     'common.cancel': 'Cancel',
     'common.confirm': 'Confirm',
-    'confirm.exit': 'Are you sure you want to quit TOKENICODE? Running tasks will be terminated.',
+    'confirm.exit': 'Are you sure you want to quit MY-CODE? Running tasks will be terminated.',
 
     // Sidebar
     'sidebar.hide': 'Hide sidebar',
@@ -832,6 +833,7 @@ const messages: Record<Locale, Record<string, string>> = {
     'panel.preview': 'Preview',
     'panel.skills': 'Skills',
     'panel.plugins': 'Plugins',
+    'panel.terminal': 'Terminal',
     'panel.close': 'Close panel',
 
     // PreviewPanel
