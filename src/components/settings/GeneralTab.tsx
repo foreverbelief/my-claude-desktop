@@ -27,8 +27,8 @@ const COLOR_THEMES: { id: ColorTheme; labelKey: string; preview: string; preview
   {
     id: 'black',
     labelKey: 'settings.black',
-    preview: '#333333',
-    previewDark: '#D0D0D0',
+    preview: '#000000',
+    previewDark: '#FFFFFF',
   },
   {
     id: 'blue',

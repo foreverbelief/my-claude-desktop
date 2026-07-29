@@ -176,12 +176,10 @@
   --color-bg-chat: #FFFFFF;
   --color-bg-sidebar: #F7F7F8;
   --color-bg-input: #FFFFFF;
-  --color-bg-user-msg: #111827;
   --color-bg-assistant-msg: #FFFFFF;
   --color-bg-tool: #F7F7F8;
   --color-bg-thinking: #F7F7F8;
   --color-bg-card: #FFFFFF;
-  --color-bg-nav-active: rgba(17, 24, 39, 0.06);
 
   --color-text-primary: #111827;
   --color-text-secondary: #374151;
@@ -191,34 +189,6 @@
 
   --color-border: #E5E7EB;
   --color-border-subtle: #ECEEF2;
-  --color-border-focus: #111827;
-
-  --color-accent: #111827;
-  --color-accent-light: #374151;
-  --color-accent-hover: #030712;
-  --color-accent-glow: rgba(17, 24, 39, 0.08);
-  --color-success: #059669;
-  --color-error: #DC2626;
-  --color-warning: #D97706;
-
-  --color-gradient-start: #111827;
-  --color-gradient-mid: #1F2937;
-  --color-gradient-end: #374151;
-
-  --color-syntax-keyword:  #7C3AED;
-  --color-syntax-string:   #059669;
-  --color-syntax-number:   #D97706;
-  --color-syntax-function: #2563EB;
-  --color-syntax-comment:  #9CA3AF;
-  --color-syntax-type:     #0891B2;
-  --color-syntax-builtin:  #6366F1;
-
-  --shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.04);
-  --shadow-md: 0 8px 24px rgba(17, 24, 39, 0.06);
-  --shadow-lg: 0 16px 42px rgba(17, 24, 39, 0.08);
-  --shadow-glow: 0 0 20px rgba(17, 24, 39, 0.06);
-
-  --color-icon-slash: #FFFFFF;
 }
 
 /* ================================================================
@@ -231,12 +201,12 @@
   --color-bg-chat: #1C1C1E;
   --color-bg-sidebar: #252528;
   --color-bg-input: #2C2C2E;
-  --color-bg-user-msg: #4E80F7;
+  --color-bg-user-msg: #D0D0D0;
   --color-bg-assistant-msg: #252528;
   --color-bg-tool: #2C2C2E;
   --color-bg-thinking: #252528;
   --color-bg-card: #252528;
-  --color-bg-nav-active: rgba(107, 154, 255, 0.10);
+  --color-bg-nav-active: rgba(255, 255, 255, 0.06);
 
   --color-text-primary: #F1F1F3;
   --color-text-secondary: #C4C4C8;
@@ -246,15 +216,25 @@
 
   --color-border: #38383C;
   --color-border-subtle: #2C2C2E;
+
+  --color-success: #34D399;
+  --color-error: #F87171;
+  --color-warning: #FBBF24;
+}
+
+/* ================================================================
+   Black background + Blue accent (主题颜色: 蓝)
+   ================================================================ */
+.bg-theme-black.theme-blue {
+  --color-bg-user-msg: #4E80F7;
+  --color-bg-nav-active: rgba(107, 154, 255, 0.10);
   --color-border-focus: #5B8DEF;
 
   --color-accent: #6B9AFF;
   --color-accent-light: #8BB5FF;
   --color-accent-hover: #5B8DEF;
   --color-accent-glow: rgba(107, 154, 255, 0.12);
-  --color-success: #34D399;
-  --color-error: #F87171;
-  --color-warning: #FBBF24;
+  --color-text-secondary: #6B9AFF;
 
   --color-gradient-start: #6B9AFF;
   --color-gradient-mid: #8BB5FF;
@@ -272,6 +252,32 @@
   --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.30);
   --shadow-lg: 0 16px 42px rgba(0, 0, 0, 0.40);
   --shadow-glow: 0 0 20px rgba(107, 154, 255, 0.08);
+
+  --color-icon-slash: var(--color-accent);
+}
+
+/* ================================================================
+   White background + Blue accent
+   ================================================================ */
+.bg-theme-white.theme-blue {
+  --color-bg-user-msg: #4E80F7;
+  --color-bg-nav-active: rgba(78, 128, 247, 0.06);
+  --color-border-focus: #4E80F7;
+
+  --color-accent: #4E80F7;
+  --color-accent-light: #6B9AFF;
+  --color-accent-hover: #3D6FE6;
+  --color-accent-glow: rgba(78, 128, 247, 0.10);
+  --color-text-secondary: #4E80F7;
+
+  --color-gradient-start: #4E80F7;
+  --color-gradient-mid: #5C8EFF;
+  --color-gradient-end: #6B9AFF;
+
+  --color-syntax-keyword:  #9333EA;
+  --color-syntax-function: #0891B2;
+
+  --shadow-glow: 0 0 20px rgba(78, 128, 247, 0.10);
 
   --color-icon-slash: var(--color-accent);
 }
