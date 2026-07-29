@@ -617,6 +617,50 @@ input, textarea, [contenteditable="true"],
   background: color-mix(in srgb, var(--color-accent) 18%, transparent);
 }
 
+/* Minimal vertical scrollbar for conversation — line+dots by default, expands on hover */
+.chat-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.chat-scrollbar::-webkit-scrollbar {
+  width: 3px;
+}
+.chat-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.chat-scrollbar::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+  border-radius: 10px;
+  min-height: 24px;
+}
+.chat-scrollbar:hover::-webkit-scrollbar {
+  width: 6px;
+}
+.chat-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-accent) 25%, transparent);
+}
+
+/* Ultra-thin scrollbar for timeline dots — only shows on hover */
+.timeline-scrollbar {
+  scrollbar-width: none;
+}
+.timeline-scrollbar::-webkit-scrollbar {
+  width: 2px;
+}
+.timeline-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.timeline-scrollbar::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 10px;
+}
+.timeline-scrollbar:hover::-webkit-scrollbar {
+  width: 3px;
+}
+.timeline-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-accent) 20%, transparent);
+}
+
 /* ================================================================
    Tiptap editor
    ================================================================ */

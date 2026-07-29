@@ -110,6 +110,10 @@ interface SettingsState {
   userDisplayName: string;
   /** Whether to show dotfiles (hidden files) in the file tree */
   showHiddenFiles: boolean;
+  /** Auto-switch between Pro/Flash based on task complexity (DeepSeek only) */
+  autoModelSwitch: boolean;
+
+  setAutoModelSwitch: (enabled: boolean) => void;
 
   // ── Custom background (user-uploaded image) ──
   /** Base64 data URL of user-uploaded custom background image, empty = disabled */
@@ -214,6 +218,7 @@ export const useSettingsStore = create<SettingsState>()(
       userAvatarUrl: '',
       userDisplayName: '',
       showHiddenFiles: false,
+      autoModelSwitch: true,
       customBgImage: '',
       customBgSize: 'cover',
       customBgPositionX: 50,
@@ -341,6 +346,9 @@ export const useSettingsStore = create<SettingsState>()(
       clearCustomBg: () => set(() => ({ customBgImage: '', customBgSize: 'cover', customBgPositionX: 50, customBgPositionY: 50, glassBlur: 8, glassOpacity: 85 })),
       toggleHiddenFiles: () =>
         set((state) => ({ showHiddenFiles: !state.showHiddenFiles })),
+
+      setAutoModelSwitch: (autoModelSwitch) =>
+        set(() => ({ autoModelSwitch })),
     }),
     {
       name: 'mycode-settings',

@@ -328,53 +328,125 @@ function ConversationTimeline({ turns, activeTurnId, showScrollBtn, onJumpTurn, 
   onJumpBottom: () => void;
 }) {
   const t = useT();
+  const [hoveredTurn, setHoveredTurn] = useState<{ text: string; top: number; left: number } | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
   if (turns.length === 0) return null;
 
+  const ITEMS_PER_PAGE = 6;
+
   return (
-    <div className="hidden lg:flex absolute right-3 top-24 bottom-28 z-10
-      flex-col items-center gap-2 pointer-events-none">
-      <div className="flex-1 min-h-0 px-1 py-2 rounded-full
-        bg-bg-card/80 backdrop-blur border border-border-subtle shadow-lg
-        overflow-y-auto scrollbar-none pointer-events-auto">
-        <div className="flex flex-col items-center gap-1.5">
-          {turns.map((turn) => {
-            const active = activeTurnId === turn.userMessageId;
-            return (
-              <button
-                key={turn.userMessageId}
-                onClick={() => onJumpTurn(turn)}
-                className={`group relative w-7 h-7 rounded-full text-[10px]
-                  flex items-center justify-center border transition-smooth
-                  ${active
-                    ? 'bg-accent text-text-inverse border-accent shadow-md'
-                    : 'bg-bg-secondary/70 text-text-tertiary border-border-subtle hover:text-text-primary hover:bg-bg-tertiary'
-                  }`}
-                title={`${t('chat.turn')} ${turn.index}: ${turn.userContent}`}
-              >
-                {turn.index > 99 ? '99+' : turn.index}
-              </button>
-            );
-          })}
+    <div className="hidden lg:flex absolute right-0.5 top-24 bottom-28 z-10
+      flex-col items-center pointer-events-none w-5 group/timeline">
+      {/* Top spacer */}
+      <div className="flex-1 min-h-4" />
+
+      {/* Dots area — fixed to show 6 items, scrollable for more */}
+      <div className="flex flex-col items-center w-full pointer-events-auto
+        flex-shrink-0 relative"
+        style={{ maxHeight: `${ITEMS_PER_PAGE * 24}px` }}>
+        {/* Vertical connecting line — full height of the scrollable content */}
+        <div className="absolute left-1/2 top-0 bottom-0 w-px bg-border-subtle
+          -translate-x-1/2 pointer-events-none z-0" />
+
+        {/* Scrollable dots */}
+        <div ref={scrollRef} className="overflow-y-auto timeline-scrollbar w-full">
+          <div className="flex flex-col items-center w-full">
+            {turns.map((turn, idx) => {
+              const active = activeTurnId === turn.userMessageId;
+              const isLast = idx === turns.length - 1;
+              return (
+                <div key={turn.userMessageId}
+                  className="flex flex-col items-center w-full flex-shrink-0"
+                  style={{ height: '24px' }}>
+                  {/* Connecting line from above */}
+                  {idx > 0 && (
+                    <div className="w-px h-[9px] bg-border-subtle flex-shrink-0" />
+                  )}
+                  {idx === 0 && (
+                    <div className="h-[9px] flex-shrink-0" />
+                  )}
+                  {/* Dot */}
+                  <button
+                    onClick={() => onJumpTurn(turn)}
+                    onMouseEnter={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setHoveredTurn({
+                        text: turn.userContent || '',
+                        top: rect.top + rect.height / 2,
+                        left: rect.left - 8,
+                      });
+                    }}
+                    onMouseLeave={() => setHoveredTurn(null)}
+                    className={`w-[6px] h-[6px] rounded-full flex-shrink-0 z-10 transition-all duration-200
+                      ${active
+                        ? 'bg-accent scale-100 shadow-sm'
+                        : 'bg-text-tertiary/20 hover:bg-text-tertiary/50 hover:scale-150'
+                      }`}
+                  />
+                  {/* Connecting line to below */}
+                  {!isLast && (
+                    <div className="w-px h-[9px] bg-border-subtle flex-shrink-0" />
+                  )}
+                  {isLast && (
+                    <div className="h-[9px] flex-shrink-0" />
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      <button
-        onClick={onJumpBottom}
-        className={`pointer-events-auto inline-flex items-center gap-1.5 px-2.5 py-1.5
-          rounded-full border border-border-subtle bg-bg-card/90 backdrop-blur
-          shadow-lg text-xs transition-smooth
-          ${showScrollBtn
-            ? 'text-accent hover:bg-accent/10'
-            : 'text-text-tertiary hover:text-text-primary hover:bg-bg-secondary'
-          }`}
-        title={t('chat.scrollToBottom')}
-      >
-        <svg width="13" height="13" viewBox="0 0 14 14" fill="none"
-          stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-          <path d="M7 2v10M3 8l4 4 4-4" />
-        </svg>
-        <span>{t('chat.latest')}</span>
-      </button>
+      {/* Bottom spacer */}
+      <div className="flex-1 min-h-4" />
+
+      {/* Scroll indicator — small native scrollbar or up/down hints */}
+      {turns.length > ITEMS_PER_PAGE && (
+        <div className="w-full flex justify-center pointer-events-auto py-0.5">
+          <div className="w-[2px] h-8 rounded-full bg-border-subtle/50 overflow-hidden">
+            <div className="w-full rounded-full bg-text-tertiary/30 transition-all"
+              style={{
+                height: `${(ITEMS_PER_PAGE / turns.length) * 100}%`,
+              }} />
+          </div>
+        </div>
+      )}
+
+      {/* Hover tooltip — fixed position, appears left of the dot */}
+      {hoveredTurn && (
+        <div
+          className="fixed z-[100] px-2.5 py-1 rounded-lg bg-bg-card border border-border-subtle
+            shadow-lg text-xs text-text-primary max-w-[180px] truncate pointer-events-none"
+          style={{
+            top: hoveredTurn.top,
+            left: hoveredTurn.left,
+            transform: 'translateX(-100%) translateY(-50%)',
+          }}
+        >
+          {hoveredTurn.text || '(empty)'}
+        </div>
+      )}
+
+      {/* Scroll to bottom — tiny dot-style button */}
+      <div className="mt-1">
+        {showScrollBtn && (
+          <button
+            onClick={onJumpBottom}
+            className="pointer-events-auto w-3.5 h-3.5 rounded-full
+              bg-accent/20 border border-accent/30
+              flex items-center justify-center
+              hover:bg-accent/40 transition-smooth"
+            title={t('chat.scrollToBottom')}
+          >
+            <svg width="8" height="8" viewBox="0 0 14 14" fill="none"
+              stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+              className="text-accent">
+              <path d="M7 2v10M3 8l4 4 4-4" />
+            </svg>
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -693,7 +765,9 @@ export function ChatPanel() {
       <div className="flex flex-1 min-h-0 relative">
       {/* Main chat area */}
       <div className="flex flex-col flex-1 min-w-0">
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-6 selectable chat-scroll-container">
+      {/* Chat card — gives the message area a defined boundary */}
+      <div className="flex-1 flex flex-col mx-3 mt-2 mb-1.5 bg-bg-card border border-border-subtle rounded-xl overflow-hidden">
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-6 selectable chat-scroll-container chat-scrollbar">
         {!workingDirectory && messages.length === 0 && !isStreaming ? (
           <WelcomeScreen />
         ) : messages.length === 0 && !isStreaming ? (
@@ -811,6 +885,7 @@ export function ChatPanel() {
           </div>
         )}
       </div>
+      </div>{/* end chat card */}
 
       {!showPlanPanel && (
         <ConversationTimeline

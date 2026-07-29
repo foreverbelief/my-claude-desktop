@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { AppShell } from './components/layout/AppShell';
 import { Sidebar } from './components/layout/Sidebar';
 import { ChatPanel } from './components/chat/ChatPanel';
@@ -8,13 +8,13 @@ import { SettingsPanel } from './components/settings/SettingsPanel';
 import { ImageLightbox } from './components/shared/ImageLightbox';
 import { ChangelogModal } from './components/shared/ChangelogModal';
 import { Toast } from './components/shared/Toast';
+import { ConfirmDialog } from './components/shared/ConfirmDialog';
 import { useSettingsStore } from './stores/settingsStore';
 import { useProviderStore } from './stores/providerStore';
 import type { ColorTheme, FontFamily, Theme } from './stores/settingsStore';
 import { useFileStore } from './stores/fileStore';
 import { useChatStore } from './stores/chatStore';
 import { useSessionStore } from './stores/sessionStore';
-import { APP_NAME } from './lib/edition';
 import { useAgentStore } from './stores/agentStore';
 import { bridge, onFileChange } from './lib/tauri-bridge';
 import { useT } from './lib/i18n';
@@ -114,6 +114,7 @@ function App() {
   const closePendingRef = useRef(false);
   const tRef = useRef(t);
   tRef.current = t;
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   useEffect(() => {
     let unlisten: (() => void) | null = null;
@@ -122,25 +123,17 @@ function App() {
       win.onCloseRequested(async (event) => {
         if (closePendingRef.current) { event.preventDefault(); return; }
         event.preventDefault();
-        closePendingRef.current = true;
-        try {
-          const { ask } = await import('@tauri-apps/plugin-dialog');
-          const confirmed = await ask(tRef.current('confirm.exit'), {
-            title: APP_NAME,
-            kind: 'warning',
-            okLabel: tRef.current('common.confirm'),
-            cancelLabel: tRef.current('common.cancel'),
-          });
-          if (confirmed) {
-            const { exit } = await import('@tauri-apps/plugin-process');
-            await exit(0);
-          }
-        } finally {
-          closePendingRef.current = false;
-        }
+        setShowCloseConfirm(true);
       }).then((fn) => { unlisten = fn; });
     });
     return () => { unlisten?.(); };
+  }, []);
+
+  const handleConfirmExit = useCallback(async () => {
+    setShowCloseConfirm(false);
+    closePendingRef.current = true;
+    const { exit } = await import('@tauri-apps/plugin-process');
+    await exit(0);
   }, []);
 
   // TK-329: On app startup (incl. browser refresh), detect and kill orphaned backend processes.
@@ -482,6 +475,17 @@ function App() {
         </div>
       )}
       <Toast />
+
+      {/* Native-themed close confirmation dialog */}
+      <ConfirmDialog
+        open={showCloseConfirm}
+        title={t('confirm.exit')}
+        message=""
+        confirmLabel={t('common.confirm')}
+        cancelLabel={t('common.cancel')}
+        onConfirm={handleConfirmExit}
+        onCancel={() => setShowCloseConfirm(false)}
+      />
     </>
   );
 }

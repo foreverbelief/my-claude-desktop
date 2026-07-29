@@ -25,6 +25,7 @@ import { envFingerprint, resolveModelForProvider, resolveModelOrError, resolveTh
 import { useProviderStore } from '../../stores/providerStore';
 import { PROVIDER_PRESETS } from '../../lib/provider-presets';
 import { displayDeepSeekModelName } from '../../lib/deepseek-models';
+import { detectTaskType, isDeepSeekProvider, getModelForTaskType } from '../../lib/auto-model';
 import { stripAnsi } from '../../lib/strip-ansi';
 import { usePlanPanelStore } from './ChatPanel';
 import { PlanReviewCard } from './PlanReviewCard';
@@ -867,8 +868,20 @@ export function InputBar() {
         return;
       }
 
+      // Auto-switch model (DeepSeek Pro/Flash) based on task complexity
+      if (useSettingsStore.getState().autoModelSwitch) {
+        const activeProviderId = useProviderStore.getState().activeProviderId;
+        if (isDeepSeekProvider(activeProviderId)) {
+          const taskType = detectTaskType(text);
+          const autoModel = getModelForTaskType(taskType);
+          if (autoModel !== selectedModel) {
+            useSettingsStore.getState().setSelectedModel(autoModel);
+          }
+        }
+      }
+
       // Check model mapping before sending — block if provider has no mapping for selected tier
-      const modelResolution = resolveModelOrError(selectedModel);
+      const modelResolution = resolveModelOrError(useSettingsStore.getState().selectedModel);
       if (!modelResolution.ok) {
         const msg = t('provider.noModelMapping')
           .replace('{provider}', modelResolution.providerName)
@@ -1135,9 +1148,9 @@ export function InputBar() {
         const liveSessionMode = useSettingsStore.getState().sessionMode;
         const liveThinkingSetting = useSettingsStore.getState().thinkingLevel;
         const liveContextWindowMode = useSettingsStore.getState().contextWindowMode;
-        const liveThinkingLevel = resolveThinkingLevelForProvider(selectedModel, liveThinkingSetting);
+        const liveThinkingLevel = resolveThinkingLevelForProvider(useSettingsStore.getState().selectedModel, liveThinkingSetting);
         const liveProviderId = useProviderStore.getState().activeProviderId || null;
-        const liveResolvedModel = resolveModelForProvider(selectedModel);
+        const liveResolvedModel = resolveModelForProvider(useSettingsStore.getState().selectedModel);
         const liveContextWindow = getContextWindowForModel(liveResolvedModel, liveContextWindowMode);
         console.log('[MY-CODE:session] starting session', { cwd, stdinId: preGeneratedId, mode: liveSessionMode, provider: liveProviderId });
         const session = await bridge.startSession({
@@ -1160,7 +1173,7 @@ export function InputBar() {
           stdinId: preGeneratedId,
           envFingerprint: envFingerprint(),
           snapshotMode: liveSessionMode,
-          snapshotModel: selectedModel,
+          snapshotModel: useSettingsStore.getState().selectedModel,
           snapshotThinking: liveThinkingSetting,
           snapshotContextWindowMode: liveContextWindowMode,
           snapshotProviderId: liveProviderId,
@@ -1473,8 +1486,9 @@ export function InputBar() {
   }, []);
 
   return (
-    <div className="p-4 relative">
-      <div className="max-w-3xl mx-auto">
+    <div className="mx-3 mb-2 bg-bg-card border border-border-subtle rounded-xl overflow-hidden">
+      <div className="relative p-3">
+        <div className="max-w-3xl mx-auto">
         {/* Rewind Panel — positioned above the input area */}
         {showRewindPanel && (
           <RewindPanel key={selectedSessionId || 'new'} onClose={() => setShowRewindPanel(false)} />
@@ -1636,7 +1650,7 @@ export function InputBar() {
           {/* Upload button */}
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="p-1.5 rounded-lg text-text-tertiary
+            className="p-1.5 rounded-lg border border-border-subtle text-text-tertiary
               hover:text-text-primary hover:bg-bg-secondary
               transition-smooth"
             title={t('input.attachFiles')}
@@ -1658,7 +1672,7 @@ export function InputBar() {
             onClick={handlePickWorkingDirectory}
             disabled={isRunning}
             className="inline-flex items-center gap-1.5 max-w-[220px] px-2 py-1 rounded-lg text-xs
-              text-text-secondary hover:text-text-primary hover:bg-bg-secondary
+              border border-border-subtle text-text-secondary hover:text-text-primary hover:bg-bg-secondary
               disabled:opacity-40 disabled:cursor-not-allowed transition-smooth"
             title={workingDirectory || t('input.selectFolder')}
           >
@@ -1709,6 +1723,7 @@ export function InputBar() {
           <ModelSelector disabled={isRunning} />
         </div>
       </div>
+    </div>
     </div>
   );
 }

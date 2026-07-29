@@ -7,6 +7,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { bridge } from '../../lib/tauri-bridge';
 import { useT } from '../../lib/i18n';
 import type { SkillInfo, SkillTranslation, SkillTranslationConfig } from '../../lib/tauri-bridge';
+import { groupSkillsByCategory } from '../../lib/skill-category';
 
 type TranslationMap = Record<string, { name: string; description: string }>;
 
@@ -130,12 +131,9 @@ export function SkillsPanel() {
       s.name.toLowerCase().includes(q) ||
       s.description.toLowerCase().includes(q);
   });
-  const sortByName = (a: SkillInfo, b: SkillInfo) =>
-    a.name.localeCompare(b.name, 'zh-Hans-CN');
 
-  // Group skills by scope
-  const globalSkills = filteredSkills.filter((s) => s.scope === 'global').sort(sortByName);
-  const projectSkills = filteredSkills.filter((s) => s.scope === 'project').sort(sortByName);
+  // Group skills by category prefix
+  const categoryGroups = groupSkillsByCategory(filteredSkills);
 
   const handleSelect = useCallback((skill: SkillInfo) => {
     selectFile(skill.path);
@@ -467,10 +465,11 @@ export function SkillsPanel() {
           </div>
         ) : (
           <>
-            {projectSkills.length > 0 && (
+            {categoryGroups.map((group) => (
               <SkillGroup
-                label={t('skills.project')}
-                skills={projectSkills}
+                key={group.category}
+                label={group.category}
+                skills={group.skills}
                 selectedFile={selectedFile}
                 onSelect={handleSelect}
                 onOpenMenu={handleOpenMenu}
@@ -479,20 +478,7 @@ export function SkillsPanel() {
                 translations={translations}
                 t={t}
               />
-            )}
-            {globalSkills.length > 0 && (
-              <SkillGroup
-                label={t('skills.global')}
-                skills={globalSkills}
-                selectedFile={selectedFile}
-                onSelect={handleSelect}
-                onOpenMenu={handleOpenMenu}
-                onToggleEnabled={toggleEnabled}
-                showTranslations={showTranslations}
-                translations={translations}
-                t={t}
-              />
-            )}
+            ))}
           </>
         )}
       </div>

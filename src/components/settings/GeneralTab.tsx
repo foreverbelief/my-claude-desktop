@@ -474,6 +474,25 @@ export function GeneralTab() {
             这个值会直接决定自动发送 `/compact` 的时机；改完后对当前会话立即生效。
           </p>
         </div>
+
+        {/* Auto Model Switch (DeepSeek) */}
+        <div className="flex items-center justify-between px-3 py-2 rounded-lg border border-border-subtle">
+          <div className="flex-1 min-w-0">
+            <div className="text-[13px] font-medium text-text-primary">{t('settings.autoModelSwitch')}</div>
+            <p className="mt-0.5 text-[11px] text-text-tertiary leading-relaxed">
+              {t('settings.autoModelSwitchHint')}
+            </p>
+          </div>
+          <button
+            onClick={() => useSettingsStore.getState().setAutoModelSwitch(!useSettingsStore.getState().autoModelSwitch)}
+            className={`relative inline-flex w-10 h-6 items-center rounded-full transition-colors duration-200 flex-shrink-0 ml-3
+              ${useSettingsStore.getState().autoModelSwitch ? 'bg-accent' : 'bg-bg-tertiary border border-border-subtle'}`}
+          >
+            <span className={`inline-block w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200
+              ${useSettingsStore.getState().autoModelSwitch ? 'translate-x-[22px]' : 'translate-x-[2px]'}`}
+            />
+          </button>
+        </div>
       </div>
     </div>
   );
