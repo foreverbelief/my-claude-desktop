@@ -1349,16 +1349,6 @@ async fn start_claude_session(
     args.push("--permission-prompt-tool".to_string());
     args.push("stdio".to_string());
 
-    // Pass session mode (--mode ask/plan) to CLI when explicitly set.
-    // Without --mode, Claude CLI defaults to auto mode which only asks
-    // for sensitive operations even with --permission-mode default.
-    if let Some(ref mode) = params.session_mode {
-        if mode == "ask" || mode == "plan" {
-            args.push("--mode".to_string());
-            args.push(mode.clone());
-        }
-    }
-
     // Extended thinking + effort level
     let thinking_level = params.thinking_level.as_deref().unwrap_or("high");
     if thinking_level == "off" {

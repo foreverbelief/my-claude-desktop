@@ -216,21 +216,21 @@ function CommandFeedbackMsg({ message }: Props) {
   const cType = message.commandType;
   const data = message.commandData || {};
 
-  // --- Mode switch: animated pill with icon ---
+  // --- Mode switch: minimal indicator bar ---
   if (cType === 'mode') {
-    const modeColors: Record<string, string> = {
-      ask: 'from-blue-500/15 to-blue-400/5 border-blue-400/30 text-blue-400',
-      plan: 'from-amber-500/15 to-amber-400/5 border-amber-400/30 text-amber-400',
-      code: 'from-emerald-500/15 to-emerald-400/5 border-emerald-400/30 text-emerald-400',
+    const modeStyle: Record<string, { bg: string; bar: string; icon: string }> = {
+      code: { bg: 'bg-bg-secondary', bar: 'bg-accent', icon: '▶' },
+      ask: { bg: 'bg-bg-secondary', bar: 'bg-blue-400/60', icon: '?' },
+      plan: { bg: 'bg-bg-secondary', bar: 'bg-amber-400/60', icon: '○' },
+      bypass: { bg: 'bg-bg-secondary', bar: 'bg-warning/60', icon: '»' },
     };
-    const colorClass = modeColors[data.mode] || modeColors.code;
+    const style = modeStyle[data.mode] || modeStyle.code;
     return (
-      <div className="flex justify-center my-2 animate-fade-in">
-        <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full
-          bg-gradient-to-r ${colorClass} border
-          shadow-sm transition-all duration-300`}>
-          <span className="text-base">{data.icon}</span>
-          <span className="text-xs font-medium">{safeContent(message.content)}</span>
+      <div className="flex justify-center my-1.5 animate-fade-in">
+        <div className={`inline-flex items-center gap-2 pl-2.5 pr-3.5 py-1.5
+          ${style.bg} border border-border-subtle rounded-lg overflow-hidden`}>
+          <div className={`w-[3px] h-4 rounded-full flex-shrink-0 ${style.bar}`} />
+          <span className="text-xs text-text-secondary">{safeContent(message.content)}</span>
         </div>
       </div>
     );
