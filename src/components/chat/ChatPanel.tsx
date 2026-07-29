@@ -336,7 +336,7 @@ function ConversationTimeline({ turns, activeTurnId, showScrollBtn, onJumpTurn, 
   const ITEMS_PER_PAGE = 6;
 
   return (
-    <div className="hidden lg:flex absolute right-1 top-24 bottom-28 z-10
+    <div className="hidden lg:flex absolute right-5 top-24 bottom-28 z-10
       flex-col items-center pointer-events-none w-6 group/timeline">
       {/* Top spacer */}
       <div className="flex-1 min-h-4" />
@@ -765,9 +765,9 @@ export function ChatPanel() {
       <div className="flex flex-1 min-h-0 relative">
       {/* Main chat area */}
       <div className="flex flex-col flex-1 min-w-0">
-      {/* Chat card — gives the message area a defined boundary */}
-      <div className="flex-1 flex flex-col mx-3 mt-2 mb-1.5 bg-bg-card border border-border-subtle rounded-xl overflow-hidden">
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-6 selectable chat-scroll-container chat-scrollbar">
+      {/* Chat card — same width as InputBar (mx-3), scrollbar at card edge, timeline dots inside */}
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 flex flex-col mx-3 mt-2 mb-1.5 bg-bg-card border border-border-subtle rounded-xl overflow-y-auto chat-scrollbar">
+      <div className="flex-1 px-4 py-6 selectable overflow-visible">
         {!workingDirectory && messages.length === 0 && !isStreaming ? (
           <WelcomeScreen />
         ) : messages.length === 0 && !isStreaming ? (
