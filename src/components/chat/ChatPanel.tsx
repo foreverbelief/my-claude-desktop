@@ -336,17 +336,17 @@ function ConversationTimeline({ turns, activeTurnId, showScrollBtn, onJumpTurn, 
   const ITEMS_PER_PAGE = 6;
 
   return (
-    <div className="hidden lg:flex absolute right-0.5 top-24 bottom-28 z-10
-      flex-col items-center pointer-events-none w-5 group/timeline">
+    <div className="hidden lg:flex absolute right-1 top-24 bottom-28 z-10
+      flex-col items-center pointer-events-none w-6 group/timeline">
       {/* Top spacer */}
       <div className="flex-1 min-h-4" />
 
       {/* Dots area — fixed to show 6 items, scrollable for more */}
       <div className="flex flex-col items-center w-full pointer-events-auto
         flex-shrink-0 relative"
-        style={{ maxHeight: `${ITEMS_PER_PAGE * 24}px` }}>
+        style={{ maxHeight: `${ITEMS_PER_PAGE * 30}px` }}>
         {/* Vertical connecting line — full height of the scrollable content */}
-        <div className="absolute left-1/2 top-0 bottom-0 w-px bg-border-subtle
+        <div className="absolute left-1/2 top-0 bottom-0 w-[2px] bg-border-default/40
           -translate-x-1/2 pointer-events-none z-0" />
 
         {/* Scrollable dots */}
@@ -358,13 +358,13 @@ function ConversationTimeline({ turns, activeTurnId, showScrollBtn, onJumpTurn, 
               return (
                 <div key={turn.userMessageId}
                   className="flex flex-col items-center w-full flex-shrink-0"
-                  style={{ height: '24px' }}>
+                  style={{ height: '30px' }}>
                   {/* Connecting line from above */}
                   {idx > 0 && (
-                    <div className="w-px h-[9px] bg-border-subtle flex-shrink-0" />
+                    <div className="w-[2px] h-[11px] bg-border-default/40 flex-shrink-0" />
                   )}
                   {idx === 0 && (
-                    <div className="h-[9px] flex-shrink-0" />
+                    <div className="h-[11px] flex-shrink-0" />
                   )}
                   {/* Dot */}
                   <button
@@ -378,18 +378,18 @@ function ConversationTimeline({ turns, activeTurnId, showScrollBtn, onJumpTurn, 
                       });
                     }}
                     onMouseLeave={() => setHoveredTurn(null)}
-                    className={`w-[6px] h-[6px] rounded-full flex-shrink-0 z-10 transition-all duration-200
+                    className={`w-[9px] h-[9px] rounded-full flex-shrink-0 z-10 transition-all duration-200
                       ${active
-                        ? 'bg-accent scale-100 shadow-sm'
-                        : 'bg-text-tertiary/20 hover:bg-text-tertiary/50 hover:scale-150'
+                        ? 'bg-accent scale-100 shadow-sm ring-[1.5px] ring-accent/20'
+                        : 'bg-text-tertiary/30 hover:bg-text-tertiary/60 hover:scale-125'
                       }`}
                   />
                   {/* Connecting line to below */}
                   {!isLast && (
-                    <div className="w-px h-[9px] bg-border-subtle flex-shrink-0" />
+                    <div className="w-[2px] h-[11px] bg-border-default/40 flex-shrink-0" />
                   )}
                   {isLast && (
-                    <div className="h-[9px] flex-shrink-0" />
+                    <div className="h-[11px] flex-shrink-0" />
                   )}
                 </div>
               );
@@ -433,13 +433,13 @@ function ConversationTimeline({ turns, activeTurnId, showScrollBtn, onJumpTurn, 
         {showScrollBtn && (
           <button
             onClick={onJumpBottom}
-            className="pointer-events-auto w-3.5 h-3.5 rounded-full
+            className="pointer-events-auto w-4 h-4 rounded-full
               bg-accent/20 border border-accent/30
               flex items-center justify-center
               hover:bg-accent/40 transition-smooth"
             title={t('chat.scrollToBottom')}
           >
-            <svg width="8" height="8" viewBox="0 0 14 14" fill="none"
+            <svg width="9" height="9" viewBox="0 0 14 14" fill="none"
               stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
               className="text-accent">
               <path d="M7 2v10M3 8l4 4 4-4" />

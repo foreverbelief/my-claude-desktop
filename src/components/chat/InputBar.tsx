@@ -1486,7 +1486,7 @@ export function InputBar() {
   }, []);
 
   return (
-    <div className="mx-3 mb-2 bg-bg-card border border-border-subtle rounded-xl overflow-hidden">
+    <div className="mx-3 mb-2 bg-bg-card border border-border-subtle rounded-xl">
       <div className="relative p-3">
         <div className="max-w-3xl mx-auto">
         {/* Rewind Panel — positioned above the input area */}
