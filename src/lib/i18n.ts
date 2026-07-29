@@ -477,10 +477,10 @@ const messages: Record<Locale, Record<string, string>> = {
     'slash.desc.usage': '显示详细的 Token 用量明细',
 
     // Command feedback
-    'cmd.switchedToAsk': '已切换到询问模式（仅回答问题，不修改代码）',
-    'cmd.switchedToPlan': '已切换到计划模式（规划任务，不直接执行）',
-    'cmd.switchedToCode': '已切换到标准自动模式（自动接受编辑，敏感操作仍会确认）',
-    'cmd.switchedToBypass': '已切换到全自动模式（跳过权限检查，下一次发送会自动重启会话生效）',
+    'cmd.switchedToAsk': '已切换到询问模式（每次工具操作前都会请求确认）',
+    'cmd.switchedToPlan': '已切换到计划模式（限制工具执行，适用于任务规划）',
+    'cmd.switchedToCode': '已切换到标准自动模式（自动接受编辑操作，其他操作会请求确认）',
+    'cmd.switchedToBypass': '已切换到全自动模式（跳过所有权限检查，自动批准所有操作）',
     'cmd.compacting': '正在压缩上下文...',
     'cmd.noActiveSession': '没有活跃的会话。请先发送一条消息。',
     'cmd.costTitle': '会话费用',
@@ -1194,10 +1194,10 @@ const messages: Record<Locale, Record<string, string>> = {
     'slash.desc.usage': 'Show detailed token usage breakdown',
 
     // Command feedback
-    'cmd.switchedToAsk': 'Switched to Ask mode (answers only, no code changes)',
-    'cmd.switchedToPlan': 'Switched to Plan mode (planning only, no execution)',
-    'cmd.switchedToCode': 'Switched to Auto mode (accept edits, still asks for sensitive actions)',
-    'cmd.switchedToBypass': 'Switched to Full Auto mode (skips permission checks; next send restarts the session automatically)',
+    'cmd.switchedToAsk': 'Switched to Ask mode (asks before every tool operation)',
+    'cmd.switchedToPlan': 'Switched to Plan mode (restricts tool execution, for planning tasks)',
+    'cmd.switchedToCode': 'Switched to Auto mode (auto-accepts file edits, asks before other operations)',
+    'cmd.switchedToBypass': 'Switched to Full Auto mode (skips all permission checks, auto-approves everything)',
     'cmd.compacting': 'Compacting context...',
     'cmd.noActiveSession': 'No active session. Send a message first.',
     'cmd.costTitle': 'Session Cost',

@@ -257,6 +257,18 @@
 }
 
 /* ================================================================
+   White background + Black (B&W) color theme — gray areas → black
+   ================================================================ */
+.bg-theme-white:not(.theme-blue) {
+  --color-bg-secondary: #000000;
+  --color-bg-tertiary: #1A1A1C;
+  --color-bg-sidebar: #000000;
+  --color-bg-user-msg: #000000;
+  --color-bg-nav-active: rgba(255, 255, 255, 0.06);
+  --color-border-subtle: #E5E7EB;
+}
+
+/* ================================================================
    White background + Blue accent
    ================================================================ */
 .bg-theme-white.theme-blue {
@@ -623,27 +635,24 @@ input, textarea, [contenteditable="true"],
   background: color-mix(in srgb, var(--color-accent) 18%, transparent);
 }
 
-/* Minimal vertical scrollbar for conversation — line+dots by default, expands on hover */
+/* Visible scrollbar for conversation — 5px, always visible, no hover-expand */
 .chat-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
+  scrollbar-color: color-mix(in srgb, var(--color-accent) 18%, transparent) transparent;
 }
 .chat-scrollbar::-webkit-scrollbar {
-  width: 3px;
+  width: 5px;
 }
 .chat-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
 .chat-scrollbar::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
-  border-radius: 10px;
-  min-height: 24px;
+  background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+  border-radius: 8px;
+  min-height: 30px;
 }
-.chat-scrollbar:hover::-webkit-scrollbar {
-  width: 6px;
-}
-.chat-scrollbar:hover::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--color-accent) 25%, transparent);
+.chat-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--color-accent) 35%, transparent);
 }
 
 /* Ultra-thin scrollbar for timeline dots — only shows on hover */
