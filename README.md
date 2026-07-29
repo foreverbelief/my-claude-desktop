@@ -14,9 +14,9 @@
 
 | 安装包 | 下载 | 说明 |
 |--------|------|------|
-| **NSIS 安装包**（推荐） | [MY-CODE_1.0.5_x64-setup.exe](https://github.com/foreverbelief/my-claude-desktop/releases/download/v1.0.5/MY-CODE_1.0.5_x64-setup.exe) | 安装时自动创建开始菜单快捷方式，适合普通用户 |
-| **MSI 安装包** | [MY-CODE_1.0.5_x64_en-US.msi](https://github.com/foreverbelief/my-claude-desktop/releases/download/v1.0.5/MY-CODE_1.0.5_x64_en-US.msi) | 标准 Windows Installer 包，适合企业批量部署 |
-| **绿色免安装版** | [mycode.exe](https://github.com/foreverbelief/my-claude-desktop/releases/download/v1.0.5/mycode.exe) | 直接运行，无需安装 |
+| **NSIS 安装包**（推荐） | [MY-CODE_1.0.5_x64-setup.exe](https://github.com/foreverbelief/my-claude-desktop/releases/download/v1.0.6/MY-CODE_1.0.5_x64-setup.exe) | 安装时自动创建开始菜单快捷方式，适合普通用户 |
+| **MSI 安装包** | [MY-CODE_1.0.5_x64_en-US.msi](https://github.com/foreverbelief/my-claude-desktop/releases/download/v1.0.6/MY-CODE_1.0.5_x64_en-US.msi) | 标准 Windows Installer 包，适合企业批量部署 |
+| **绿色免安装版** | [mycode.exe](https://github.com/foreverbelief/my-claude-desktop/releases/download/v1.0.6/mycode.exe) | 直接运行，无需安装 |
 
 双击任一安装包即可安装。安装后桌面会生成快捷方式，双击即可启动。
 
