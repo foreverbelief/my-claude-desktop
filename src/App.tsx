@@ -195,9 +195,10 @@ function App() {
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      // Allow context menu only in input fields and textareas
+      // Allow context menu in input fields, textareas, and data-contextmenu elements
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA'
-        || target.isContentEditable) return;
+        || target.isContentEditable
+        || target.closest('[data-contextmenu]')) return;
       e.preventDefault();
     };
     document.addEventListener('contextmenu', handler);

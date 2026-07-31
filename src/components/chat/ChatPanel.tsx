@@ -5,6 +5,7 @@ import { MessageBubble } from './MessageBubble';
 import { ToolGroup } from './ToolGroup';
 import { InputBar } from './InputBar';
 import { ExportMenu } from '../conversations/ExportMenu';
+import { ChatContextMenu } from './ChatContextMenu';
 import { UpdateButton } from '../shared/UpdateButton';
 import {
   useSettingsStore,
@@ -555,6 +556,25 @@ export function ChatPanel() {
   const [activeTurnId, setActiveTurnId] = useState<string | undefined>();
   const turns = useMemo(() => parseTurns(messages), [messages]);
 
+  // Right-click context menu state
+  const [ctxMenu, setCtxMenu] = useState<{
+    x: number; y: number; selectedText: string; fullText: string;
+  } | null>(null);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const sel = window.getSelection();
+    const selectedText = sel ? sel.toString().trim() : '';
+    // Get full text from all assistant and user messages in the current view
+    const allText = messages
+      .filter((m) => m.type === 'text' && (m.role === 'user' || m.role === 'assistant'))
+      .map((m) => m.content || '')
+      .filter(Boolean)
+      .join('\n\n');
+    setCtxMenu({ x: e.clientX, y: e.clientY, selectedText, fullText: allText });
+  }, [messages]);
+
   const setMessageNode = useCallback((id: string) => (node: HTMLDivElement | null) => {
     if (node) {
       messageRefs.current.set(id, node);
@@ -766,7 +786,7 @@ export function ChatPanel() {
       {/* Main chat area */}
       <div className="flex flex-col flex-1 min-w-0">
       {/* Chat card — same width as InputBar (mx-3), scrollbar at card edge, timeline dots inside */}
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 flex flex-col mx-3 mt-2 mb-1.5 bg-bg-card border border-border-subtle rounded-xl overflow-y-auto chat-scrollbar">
+      <div ref={scrollRef} onScroll={handleScroll} data-contextmenu onContextMenu={handleContextMenu} className="flex-1 flex flex-col mx-3 mt-2 mb-1.5 bg-bg-card border border-border-subtle rounded-xl overflow-y-auto chat-scrollbar">
       <div className="flex-1 px-4 py-6 selectable overflow-visible">
         {!workingDirectory && messages.length === 0 && !isStreaming ? (
           <WelcomeScreen />
@@ -953,6 +973,17 @@ export function ChatPanel() {
         />
       )}
       </div>{/* end flex row */}
+
+      {/* Right-click context menu */}
+      {ctxMenu && (
+        <ChatContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          selectedText={ctxMenu.selectedText}
+          fullText={ctxMenu.fullText}
+          onClose={() => setCtxMenu(null)}
+        />
+      )}
     </div>
   );
 }

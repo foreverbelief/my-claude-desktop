@@ -287,15 +287,18 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
           const existing = bgTab?.messages.find((m) => m.id === questionId && m.type === 'question')
             || bgTab?.messages.find((m) => m.type === 'question' && !m.resolved && m.toolName === 'AskUserQuestion');
           if (existing) {
-            store.updateMessage(tabId, existing.id, {
+            const bgPatch: Record<string, unknown> = {
               permissionData: {
                 requestId: msg.request_id,
                 toolName: msg.tool_name,
-                input: msg.input,
+                input: msg.input ?? existing.permissionData?.input,
                 toolUseId: msg.tool_use_id,
               },
-              toolInput: msg.input,
-            });
+            };
+            if (msg.input != null) {
+              bgPatch.toolInput = msg.input;
+            }
+            store.updateMessage(tabId, existing.id, bgPatch);
             return;
           }
           const questions = msg.input?.questions;
@@ -845,15 +848,20 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
           // Patch permissionData so QuestionCard uses respondPermission (SDK path)
           // instead of sendStdin (legacy path). Always update — even if permissionData
           // exists — because a new control_request supersedes a stale one.
-          chatStore.updateMessage(tabId, existing.id, {
+          // Only overwrite toolInput/input if msg.input is present — avoids
+          // null-overwrite race with stream event handler (TK-103).
+          const patch: Record<string, unknown> = {
             permissionData: {
               requestId: msg.request_id,
               toolName: msg.tool_name,
-              input: msg.input,
+              input: msg.input ?? existing.permissionData?.input, // preserve existing if null
               toolUseId: msg.tool_use_id,
             },
-            toolInput: msg.input,
-          });
+          };
+          if (msg.input != null) {
+            patch.toolInput = msg.input;
+          }
+          chatStore.updateMessage(tabId, existing.id, patch);
           return;
         }
         const questions = msg.input?.questions;

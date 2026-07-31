@@ -106,28 +106,30 @@ export function QuestionCard({ message, floating }: Props) {
       const answers: Record<string, string> = {};
       questions.forEach((q, qIdx) => {
         if (useOther[qIdx] && otherText[qIdx]?.trim()) {
-          answers[String(qIdx)] = otherText[qIdx].trim();
+          answers[q.question] = otherText[qIdx].trim();
         } else {
           const selected = selectedMap[qIdx] || new Set<number>();
           const labels = Array.from(selected)
             .map((i) => q.options[i]?.label)
             .filter(Boolean);
           if (labels.length > 0) {
-            answers[String(qIdx)] = labels.join(', ');
+            answers[q.question] = labels.join(', ');
           }
         }
       });
       setInteractionState(qTabId, message.id, 'sending');
       try {
-        // If this question arrived via SDK control_request (permissionData present),
-        // respond via respondPermission with answers in updatedInput.
-        // Otherwise use sendStdin (legacy streaming path).
+        // SDK expects updatedInput to contain both questions (original input)
+        // and answers keyed by question text (not numeric index).
         const permData = message.permissionData;
         if (permData?.requestId) {
-          const updatedInput = { ...message.toolInput, answers };
-          await bridge.respondPermission(stdinId, permData.requestId, true, undefined, permData.toolUseId, updatedInput);
+          const baseInput = permData?.input ?? message.toolInput ?? {};
+          const updatedInputReplied = { ...baseInput, answers };
+          console.log('[TC:question] respondPermission updatedInput:', JSON.stringify(updatedInputReplied));
+          await bridge.respondPermission(stdinId, permData.requestId, true, undefined, permData.toolUseId, updatedInputReplied);
         } else {
-          await bridge.sendStdin(stdinId, JSON.stringify({ answers }));
+          console.log('[TC:question] sendStdin fallback, questions:', questions.length, 'answers:', answers);
+          await bridge.sendStdin(stdinId, JSON.stringify({ questions, answers }));
         }
         setInteractionState(qTabId, message.id, 'resolved');
         setSessionStatus(qTabId, 'running');
@@ -151,8 +153,9 @@ export function QuestionCard({ message, floating }: Props) {
     try {
       const permData = message.permissionData;
       if (permData?.requestId) {
-        const updatedInput = { ...message.toolInput, answers: {} };
-        await bridge.respondPermission(stdinId, permData.requestId, true, undefined, permData.toolUseId, updatedInput);
+        const baseInput = permData?.input ?? message.toolInput ?? {};
+        const updatedInputReplied = { ...baseInput, answers: {} };
+        await bridge.respondPermission(stdinId, permData.requestId, true, undefined, permData.toolUseId, updatedInputReplied);
       } else {
         await bridge.sendStdin(stdinId, JSON.stringify({ answers: {} }));
       }
