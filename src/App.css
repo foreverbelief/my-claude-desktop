@@ -265,6 +265,13 @@
   --color-accent-hover: #1A1A1A;
 }
 
+/* White background + B&W accent — user message bubble pure black.
+   No :not(.dark) guard: 简约白 forces the light palette even in dark
+   mode, where .dark would otherwise leak a light-gray bubble here. */
+html.bg-theme-white:not(.theme-blue) {
+  --color-bg-user-msg: #000000;
+}
+
 /* ================================================================
    White background + Blue accent
    ================================================================ */

@@ -1,5 +1,6 @@
-import { memo, useState, useCallback, type ReactNode } from 'react';
+import { memo, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { type ChatMessage } from '../../stores/chatStore';
+import { useSessionStore } from '../../stores/sessionStore';
 import { useFileStore } from '../../stores/fileStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useLightboxStore } from '../shared/ImageLightbox';
@@ -95,6 +96,40 @@ function renderCodeSegment(inner: string, key: number): ReactNode {
   );
 }
 
+/* ================================================================
+   Action icons (DeepSeek-style): copy / check / edit
+   ================================================================ */
+function CopyIcon({ size = 13 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none"
+      stroke="currentColor" strokeWidth="1.3" className="flex-shrink-0">
+      <rect x="5.8" y="5.8" width="8.4" height="8.4" rx="1.8" />
+      <path d="M10.2 3.2h-6A1.5 1.5 0 0 0 2.7 4.7v6" />
+    </svg>
+  );
+}
+
+function CheckIcon({ size = 13 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none"
+      stroke="currentColor" strokeWidth="1.8" className="flex-shrink-0"
+      strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 8.5l3.5 3.5L13 5" />
+    </svg>
+  );
+}
+
+function EditIcon({ size = 13 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none"
+      stroke="currentColor" strokeWidth="1.3" className="flex-shrink-0"
+      strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11.2 2.3l2.5 2.5-7.2 7.2H4v-2.5l7.2-7.2z" />
+      <path d="M9.8 3.7l2.5 2.5" />
+    </svg>
+  );
+}
+
 /** Parse backtick-wrapped segments in user text into styled inline code elements.
  *  Handles both single ` and triple ``` (renders as single-line code).
  *  File paths inside backticks become clickable chips. */
@@ -122,6 +157,9 @@ function UserMsg({ message }: Props) {
   const t = useT();
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const editRef = useRef<HTMLTextAreaElement>(null);
   const attachments = message.attachments;
   const content = safeContent(message.content);
   const lines = content.split('\n');
@@ -130,6 +168,14 @@ function UserMsg({ message }: Props) {
     ? lines.slice(0, USER_MSG_COLLAPSE_LINES).join('\n')
     : content;
 
+  // Auto-focus the edit textarea and place the caret at the end
+  useEffect(() => {
+    if (editing && editRef.current) {
+      editRef.current.focus();
+      editRef.current.setSelectionRange(draft.length, draft.length);
+    }
+  }, [editing, draft.length]);
+
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(content).then(() => {
       setCopied(true);
@@ -137,69 +183,146 @@ function UserMsg({ message }: Props) {
     });
   }, [content]);
 
+  const startEditing = useCallback(() => {
+    setDraft(content);
+    setEditing(true);
+  }, [content]);
+
+  const cancelEditing = useCallback(() => {
+    setEditing(false);
+  }, []);
+
+  const confirmEdit = useCallback(() => {
+    const newText = draft.trim();
+    if (!newText || newText === content) {
+      setEditing(false);
+      return;
+    }
+    const tabId = useSessionStore.getState().selectedSessionId;
+    if (!tabId) return;
+    // InputBar listens for this event and runs the full send pipeline:
+    // trims messages after the edited one, then sends the new text.
+    window.dispatchEvent(new CustomEvent('mycode:edit-message', {
+      detail: { messageId: message.id, text: newText },
+    }));
+    setEditing(false);
+  }, [draft, content, message.id]);
+
+  const handleEditKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      confirmEdit();
+    } else if (e.key === 'Escape') {
+      setEditing(false);
+    }
+  }, [confirmEdit]);
+
   return (
     <div className="flex justify-end gap-2.5 group/user relative">
-      {/* Copy button — visible on hover */}
-      <button
-        onClick={handleCopy}
-        className="absolute -top-2 right-1 z-10 opacity-0 group-hover/user:opacity-100
-          px-1.5 py-0.5 rounded-md text-[10px] font-medium
-          bg-bg-tertiary/80 text-text-muted hover:text-text-primary
-          hover:bg-bg-tertiary border border-border-subtle
-          transition-smooth cursor-pointer"
-      >
-        {copied ? t('msg.copied') : t('msg.copyText')}
-      </button>
       <div className="max-w-[75%] px-3.5 py-2.5 rounded-2xl rounded-br-md
         bg-bg-user-msg text-text-inverse
         text-sm leading-relaxed shadow-md whitespace-pre-wrap">
-        {renderUserContent(displayContent)}
-        {!expanded && isLong && (
-          <span className="text-white/60">…</span>
-        )}
-        {isLong && (
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="block mt-1.5 text-xs text-white/60 hover:text-white/90
-              transition-smooth"
-          >
-            {expanded ? '▲ 收起' : '▼ 展开全部'}
-          </button>
-        )}
-        {attachments && attachments.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {attachments.map((att, i) => (
+        {editing ? (
+          <div className="whitespace-normal">
+            <textarea
+              ref={editRef}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={handleEditKeyDown}
+              rows={Math.min(8, Math.max(2, draft.split('\n').length))}
+              className="w-full bg-black/25 border border-white/20 rounded-lg
+                px-2.5 py-2 text-sm text-white leading-relaxed
+                resize-y outline-none focus:border-white/40
+                font-sans whitespace-pre-wrap"
+            />
+            <div className="flex items-center justify-end gap-1.5 mt-2">
               <button
-                key={i}
-                onClick={() => {
-                  if (att.isImage) {
-                    useLightboxStore.getState().openFile(att.path, att.name);
-                  } else {
-                    useFileStore.getState().selectFile(att.path);
-                  }
-                }}
-                className="inline-flex items-center gap-2 px-2.5 py-1.5
-                  bg-white/10 hover:bg-white/20 rounded-lg border border-white/15
-                  transition-smooth cursor-pointer text-left"
+                onClick={cancelEditing}
+                className="px-2.5 py-1 text-xs text-white/60 hover:text-white
+                  rounded-md hover:bg-white/10 transition-smooth cursor-pointer"
               >
-                {att.isImage && att.preview ? (
-                  <img src={att.preview} alt="" className="w-8 h-8 rounded object-cover" />
-                ) : (
-                  <span className="flex items-center justify-center w-8 h-8 rounded
-                    bg-white/10 text-[10px] font-mono font-semibold uppercase opacity-80">
-                    {getFileExt(att.name) || (
-                      <svg width="14" height="14" viewBox="0 0 12 12" fill="none"
-                        stroke="currentColor" strokeWidth="1.2">
-                        <path d="M7 1H3a1 1 0 00-1 1v8a1 1 0 001 1h6a1 1 0 001-1V4L7 1z" />
-                        <path d="M7 1v3h3" />
-                      </svg>
-                    )}
-                  </span>
-                )}
-                <span className="text-xs truncate max-w-[180px]">{att.name}</span>
+                {t('msg.editCancel')}
               </button>
-            ))}
+              <button
+                onClick={confirmEdit}
+                disabled={!draft.trim() || draft.trim() === content}
+                className="px-2.5 py-1 text-xs font-medium bg-white/15
+                  hover:bg-white/25 rounded-md text-white transition-smooth
+                  cursor-pointer disabled:opacity-40 disabled:cursor-default"
+              >
+                {t('msg.editConfirm')}
+              </button>
+            </div>
           </div>
+        ) : (
+          <>
+            {renderUserContent(displayContent)}
+            {!expanded && isLong && (
+              <span className="text-white/60">…</span>
+            )}
+            {isLong && (
+              <button
+                onClick={() => setExpanded(!expanded)}
+                className="block mt-1.5 text-xs text-white/60 hover:text-white/90
+                  transition-smooth"
+              >
+                {expanded ? '▲ 收起' : '▼ 展开全部'}
+              </button>
+            )}
+            <div className="flex items-center gap-0.5 mt-1.5">
+              <button
+                onClick={handleCopy}
+                title={copied ? t('msg.copied') : t('msg.copyMessage')}
+                className="p-1 rounded-md text-white/60 hover:text-white
+                  hover:bg-white/10 transition-smooth cursor-pointer"
+              >
+                {copied ? <CheckIcon /> : <CopyIcon />}
+              </button>
+              <button
+                onClick={startEditing}
+                title={t('msg.editMessage')}
+                className="p-1 rounded-md text-white/60 hover:text-white
+                  hover:bg-white/10 transition-smooth cursor-pointer"
+              >
+                <EditIcon />
+              </button>
+            </div>
+            {attachments && attachments.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {attachments.map((att, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      if (att.isImage) {
+                        useLightboxStore.getState().openFile(att.path, att.name);
+                      } else {
+                        useFileStore.getState().selectFile(att.path);
+                      }
+                    }}
+                    className="inline-flex items-center gap-2 px-2.5 py-1.5
+                      bg-white/10 hover:bg-white/20 rounded-lg border border-white/15
+                      transition-smooth cursor-pointer text-left"
+                  >
+                    {att.isImage && att.preview ? (
+                      <img src={att.preview} alt="" className="w-8 h-8 rounded object-cover" />
+                    ) : (
+                      <span className="flex items-center justify-center w-8 h-8 rounded
+                        bg-white/10 text-[10px] font-mono font-semibold uppercase opacity-80">
+                        {getFileExt(att.name) || (
+                          <svg width="14" height="14" viewBox="0 0 12 12" fill="none"
+                            stroke="currentColor" strokeWidth="1.2">
+                            <path d="M7 1H3a1 1 0 00-1 1v8a1 1 0 001 1h6a1 1 0 001-1V4L7 1z" />
+                            <path d="M7 1v3h3" />
+                          </svg>
+                        )}
+                      </span>
+                    )}
+                    <span className="text-xs truncate max-w-[180px]">{att.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
       <UserAvatar size="w-8 h-8 text-xs" className="mt-0.5" />
@@ -404,6 +527,16 @@ function CommandFeedbackMsg({ message }: Props) {
    AssistantMsg — markdown with avatar (uses shared MarkdownRenderer)
    ================================================================ */
 function AssistantMsg({ message, isFirstInGroup = true }: Props) {
+  const t = useT();
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(safeContent(message.content)).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [message.content]);
+
   return (
     <div className="flex gap-3">
       {/* Avatar: show only for the first message in a consecutive group */}
@@ -414,6 +547,14 @@ function AssistantMsg({ message, isFirstInGroup = true }: Props) {
       )}
       <div className="flex-1 min-w-0 text-base text-text-primary leading-relaxed">
         <MarkdownRenderer content={safeContent(message.content)} />
+        <button
+          onClick={handleCopy}
+          title={copied ? t('msg.copied') : t('msg.copyMessage')}
+          className="mt-1 p-1 rounded-md text-text-tertiary hover:text-text-primary
+            hover:bg-bg-tertiary/40 transition-smooth cursor-pointer"
+        >
+          {copied ? <CheckIcon /> : <CopyIcon />}
+        </button>
       </div>
     </div>
   );

@@ -418,7 +418,11 @@ export function InputBar() {
   }, [activePrefix]);
 
   // Ref to always point to the latest handleSubmit (avoids stale closure)
-  const handleSubmitRef = useRef<() => void>(() => {});
+  const handleSubmitRef = useRef<(text?: string) => void>(() => {});
+  // Pending edit-message operation (DeepSeek-style edit & resend).
+  // Consumed inside handleSubmit: updates the edited bubble, trims messages
+  // after it, then sends the new text via the normal pipeline.
+  const editSubmitRef = useRef<{ messageId: string; text: string } | null>(null);
   // Ref to always point to the latest handleStderrLine (used by retry logic in handleStreamMessage)
   const handleStderrLineRef = useRef<(line: string, sid: string) => void>(() => {});
   /** Last non-empty stderr line — shown to user if process exits without response */
@@ -682,7 +686,7 @@ export function InputBar() {
   }, [executeImmediateCommand]);
 
   // --- Submit ---
-  const handleSubmit = useCallback(async () => {
+  const handleSubmit = useCallback(async (overrideText?: string) => {
     // Capture tabId at the start of submission
     let tabId = useSessionStore.getState().selectedSessionId;
     if (!tabId) {
@@ -694,9 +698,27 @@ export function InputBar() {
     }
     useChatStore.getState().ensureTab(tabId);
 
+    // Edit-message flow: update the edited bubble in place, drop everything
+    // after it from the view, then send the new text as a fresh turn.
+    const editOp = editSubmitRef.current;
+    editSubmitRef.current = null;
+    const handledEdit = Boolean(editOp);
+    if (editOp) {
+      useChatStore.setState((state) => {
+        const tab = state.tabs.get(tabId);
+        if (!tab) return {};
+        const idx = tab.messages.findIndex((m) => m.id === editOp.messageId);
+        if (idx < 0) return {};
+        const newTabs = new Map(state.tabs);
+        newTabs.set(tabId, { ...tab, messages: tab.messages.slice(0, idx + 1) });
+        return { tabs: newTabs, sessionCache: newTabs };
+      });
+      useChatStore.getState().updateMessage(tabId, editOp.messageId, { content: editOp.text });
+    }
+
     // Read input from store directly (not closure) so that async callers
     // like handlePlanApprove (setInput + rAF) always see the latest value.
-    const rawInput = getActiveTabState().inputDraft || textareaRef.current?.getText() || '';
+    const rawInput = overrideText ?? (getActiveTabState().inputDraft || textareaRef.current?.getText() || '');
     let text = rawInput.trim();
 
     // Plan approval shortcut: empty Enter triggers approve & execute flow
@@ -798,9 +820,10 @@ export function InputBar() {
     setInputSync('');
 
     // Silent restart: skip user message bubble (Code mode ExitPlanMode auto-recovery)
+    // Edit flow: bubble already updated in place at the top — no new bubble.
     if (silentRestartRef.current) {
       silentRestartRef.current = false;
-    } else {
+    } else if (!handledEdit) {
       // Add user message (show original text, not with prefix)
       addMessage(tabId, {
         id: generateMessageId(),
@@ -1211,6 +1234,20 @@ export function InputBar() {
 
   // Keep ref in sync so executeImmediateCommand can call latest handleSubmit
   handleSubmitRef.current = handleSubmit;
+
+  // Edit-message support: MessageBubble dispatches this event with
+  // { messageId, text } — run the standard send pipeline with the edited
+  // text (handleSubmit trims the history and updates the bubble in place).
+  useEffect(() => {
+    const onEditMessage = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail?.messageId || typeof detail.text !== 'string') return;
+      editSubmitRef.current = { messageId: detail.messageId, text: detail.text };
+      handleSubmitRef.current(detail.text);
+    };
+    window.addEventListener('mycode:edit-message', onEditMessage);
+    return () => window.removeEventListener('mycode:edit-message', onEditMessage);
+  }, []);
 
   // handleStreamMessage and handleBackgroundStreamMessage are provided by
   // useStreamProcessor hook (see src/hooks/useStreamProcessor.ts).
@@ -1625,7 +1662,7 @@ export function InputBar() {
             </button>
           )}
           <button
-            onClick={handleSubmit}
+            onClick={() => handleSubmit()}
             disabled={isAwaiting || (!input.trim() && !activePrefix)}
             className={`flex-shrink-0 self-end w-8 h-8 rounded-[10px]
               flex items-center justify-center transition-smooth

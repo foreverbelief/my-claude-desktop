@@ -282,6 +282,10 @@ const messages: Record<Locale, Record<string, string>> = {
     // Markdown rich text
     'msg.copyCode': '复制',
     'msg.copyText': '复制选中文字',
+    'msg.copyMessage': '复制消息',
+    'msg.editMessage': '编辑消息',
+    'msg.editCancel': '取消编辑',
+    'msg.editConfirm': '发送修改',
     'msg.copyMessages': '复制全部',
     'msg.copied': '已复制！',
     'msg.imgError': '图片加载失败',
@@ -1000,6 +1004,10 @@ const messages: Record<Locale, Record<string, string>> = {
     // Markdown rich text
     'msg.copyCode': 'Copy',
     'msg.copyText': 'Copy selection',
+    'msg.copyMessage': 'Copy message',
+    'msg.editMessage': 'Edit message',
+    'msg.editCancel': 'Cancel edit',
+    'msg.editConfirm': 'Send edit',
     'msg.copyMessages': 'Copy all',
     'msg.copied': 'Copied!',
     'msg.imgError': 'Image failed to load',
