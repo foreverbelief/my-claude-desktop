@@ -1,6 +1,6 @@
 [package]
 name = "mycode"
-version = "1.0.6"
+version = "1.0.7"
 description = "MY-CODE DeepSeek Alpha - a DeepSeek/CC Switch focused MY-CODE fork"
 authors = ["TinyZ"]
 license = "Apache-2.0"
