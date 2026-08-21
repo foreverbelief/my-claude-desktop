@@ -29,6 +29,8 @@ interface AgentState {
   saveToCache: (tabId: string) => void;
   /** Restore agents from cache for a tab (returns true if found) */
   restoreFromCache: (tabId: string) => boolean;
+  /** Remove a tab's agent cache entirely (used when deleting a session) */
+  removeFromCache: (tabId: string) => void;
 }
 
 // --- Store ---
@@ -45,10 +47,15 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   },
 
   updatePhase: (id, phase, currentTool) => {
+    const agent = get().agents.get(id);
+    // H7: skip the store write when nothing changed — stream events call
+    // updatePhase('thinking'/'writing') on every delta, which would otherwise
+    // rebuild the agents Map and re-render the agent panel at full rate.
+    if (agent && agent.phase === phase && agent.currentTool === currentTool) return;
     const next = new Map(get().agents);
-    const agent = next.get(id);
-    if (agent && agent.phase !== 'completed' && agent.phase !== 'error') {
-      next.set(id, { ...agent, phase, currentTool });
+    const a = next.get(id);
+    if (a && a.phase !== 'completed' && a.phase !== 'error') {
+      next.set(id, { ...a, phase, currentTool });
       set({ agents: next });
     }
   },
@@ -90,6 +97,12 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     }
     set({ agents: new Map(cached) });
     return true;
+  },
+
+  removeFromCache: (tabId) => {
+    const next = new Map(get().agentCache);
+    next.delete(tabId);
+    set({ agentCache: next });
   },
 }));
 

@@ -6,11 +6,6 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import { PROVIDER_PRESETS } from '../../lib/provider-presets';
 import { normalizeProviderModelName } from '../../lib/deepseek-models';
 
-const MODEL_TIERS: { tier: 'opus' | 'sonnet'; labelKey: string; placeholderKey: string }[] = [
-  { tier: 'opus', labelKey: 'provider.opusModel', placeholderKey: 'provider.opusPlaceholder' },
-  { tier: 'sonnet', labelKey: 'provider.sonnetModel', placeholderKey: 'provider.sonnetPlaceholder' },
-];
-
 const INPUT_CLASS = 'w-full px-3 py-2 text-[13px] bg-bg-chat border border-border-subtle rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent';
 
 /* SVG eye icons */
@@ -42,10 +37,11 @@ interface ProviderFormProps {
   onClose: () => void;
   onDelete: () => void;
   autoTest?: boolean;
+  autoDiscover?: boolean;
   onTestStatusChange?: (status: TestStatus) => void;
 }
 
-export function ProviderForm({ provider, onClose, onDelete, autoTest, onTestStatusChange }: ProviderFormProps) {
+export function ProviderForm({ provider, onClose, onDelete, autoTest, autoDiscover, onTestStatusChange }: ProviderFormProps) {
   const t = useT();
   const updateProvider = useProviderStore((s) => s.updateProvider);
 
@@ -61,6 +57,12 @@ export function ProviderForm({ provider, onClose, onDelete, autoTest, onTestStat
   const [_testError, setTestError] = useState('');
   const [testTimeMs, setTestTimeMs] = useState<number | null>(null);
   const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
+  const [discovering, setDiscovering] = useState(false);
+  const [discoveredModels, setDiscoveredModels] = useState<string[]>([]);
+  const [selectedDiscovered, setSelectedDiscovered] = useState<Set<string>>(new Set());
+  const [discoveryError, setDiscoveryError] = useState('');
+  const [discoveryEndpoint, setDiscoveryEndpoint] = useState('');
+  const [addFeedback, setAddFeedback] = useState('');
 
   const setTestStatus = useCallback((status: TestStatus) => {
     _setTestStatus(status);
@@ -91,26 +93,7 @@ export function ProviderForm({ provider, onClose, onDelete, autoTest, onTestStat
   // API format selector hidden from UI — kept for backward compat
   const handleApiFormatChange = (v: 'anthropic' | 'openai') => { setApiFormat(v); autoSave({ apiFormat: v }); };
 
-  const FIXED_TIERS = new Set(['opus', 'sonnet', 'haiku']);
-
-  const getMapping = (tier: string): string => {
-    return normalizeProviderModelName(mappings.find((m) => m.tier === tier)?.providerModel || '');
-  };
-
-  const updateMapping = (tier: string, value: string) => {
-    const updated = mappings.filter((m) => m.tier !== tier && !(tier === 'sonnet' && m.tier === 'haiku'));
-    const providerModel = normalizeProviderModelName(value);
-    if (providerModel) {
-      updated.push({ tier, providerModel });
-      if (tier === 'sonnet') {
-        updated.push({ tier: 'haiku', providerModel });
-      }
-    }
-    setMappings(updated);
-    autoSave({ modelMappings: updated });
-  };
-
-  const extraMappings = mappings.filter((m) => !FIXED_TIERS.has(m.tier));
+  const extraMappings = mappings;
 
   const addExtraMapping = () => {
     const updated = [...mappings, { tier: '', providerModel: '' }];
@@ -122,14 +105,14 @@ export function ProviderForm({ provider, onClose, onDelete, autoTest, onTestStat
   const updateExtraModel = (oldTier: string, modelName: string) => {
     const providerModel = normalizeProviderModelName(modelName);
     const updated = mappings.map((m) =>
-      m.tier === oldTier && !FIXED_TIERS.has(m.tier) ? { tier: providerModel, providerModel } : m,
+      m.tier === oldTier ? { tier: providerModel, providerModel } : m,
     );
     setMappings(updated);
     autoSave({ modelMappings: updated });
   };
 
   const removeExtraMapping = (tier: string) => {
-    const updated = mappings.filter((m) => m.tier !== tier || FIXED_TIERS.has(m.tier));
+    const updated = mappings.filter((m) => m.tier !== tier);
     setMappings(updated);
     autoSave({ modelMappings: updated });
   };
@@ -150,6 +133,54 @@ export function ProviderForm({ provider, onClose, onDelete, autoTest, onTestStat
   const handleExtraEnvAdd = () => {
     const key = `NEW_VAR_${Object.keys(extraEnv).length}`;
     setExtraEnv({ ...extraEnv, [key]: '' });
+  };
+
+  const handleDiscoverModels = useCallback(async () => {
+    setDiscovering(true);
+    setDiscoveryError('');
+    try {
+      if (!baseUrl.trim() || !apiKey.trim()) {
+        throw new Error(t('provider.discoveryMissingFields'));
+      }
+      const result = await bridge.discoverProviderModels(baseUrl, apiFormat, apiKey, proxyUrl || undefined);
+      setDiscoveredModels(result.models);
+      setDiscoveryEndpoint(result.endpoint);
+      setSelectedDiscovered(new Set(result.models));
+    } catch (e) {
+      setDiscoveredModels([]);
+      setSelectedDiscovered(new Set());
+      setDiscoveryError(String(e).replace(/^Error: /, ''));
+    } finally {
+      setDiscovering(false);
+    }
+  }, [apiFormat, apiKey, baseUrl, proxyUrl, t]);
+
+  const toggleDiscoveredModel = (model: string) => {
+    setSelectedDiscovered((current) => {
+      const next = new Set(current);
+      if (next.has(model)) next.delete(model); else next.add(model);
+      return next;
+    });
+  };
+
+  const addDiscoveredModels = () => {
+    const selected = [...selectedDiscovered];
+    if (selected.length === 0) return;
+    const existing = new Set(mappings.map((mapping) => mapping.providerModel.toLowerCase()));
+    const newMappings = selected
+      .filter((model) => !existing.has(model.toLowerCase()))
+      .map((model) => ({ tier: model, providerModel: model }));
+    const updated = [...mappings, ...newMappings];
+    setMappings(updated);
+    autoSave({ modelMappings: updated });
+    // Feedback so the click always has a visible result:
+    // - newly added models count, or a notice that everything was already there
+    const addedCount = newMappings.length;
+    setAddFeedback(addedCount > 0
+      ? t('provider.addedModels').replace('{count}', String(addedCount))
+      : t('provider.modelsAlreadyExist'));
+    // Clear the discovery selection after adding to avoid accidental duplicates
+    setSelectedDiscovered(new Set());
   };
 
   const handleTestConnection = useCallback(async () => {
@@ -198,6 +229,15 @@ export function ProviderForm({ provider, onClose, onDelete, autoTest, onTestStat
       handleTestConnection();
     }
   }, [autoTest, handleTestConnection]);
+
+  // Auto-trigger model discovery when opened via the card discover button
+  const autoDiscoverDone = useRef(false);
+  useEffect(() => {
+    if (autoDiscover && !autoDiscoverDone.current) {
+      autoDiscoverDone.current = true;
+      handleDiscoverModels();
+    }
+  }, [autoDiscover, handleDiscoverModels]);
 
   return (
     <div className="p-4 rounded-lg border border-border-subtle bg-bg-secondary/50 space-y-3 ml-5">
@@ -357,6 +397,59 @@ export function ProviderForm({ provider, onClose, onDelete, autoTest, onTestStat
         </div>
       </div>
 
+      {/* Model discovery */}
+      <section className="rounded-lg border border-border-subtle bg-bg-chat/60 p-3 space-y-2.5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-xs font-medium text-text-primary">{t('provider.discoveryTitle')}</div>
+            <p className="mt-0.5 text-xs text-text-tertiary leading-relaxed">{t('provider.discoveryHint')}</p>
+          </div>
+          <button
+            onClick={handleDiscoverModels}
+            disabled={discovering || !baseUrl || !apiKey}
+            className="shrink-0 px-3 py-1.5 rounded-md border border-accent/30 bg-accent/10 text-xs font-medium text-accent hover:bg-accent/15 disabled:opacity-40 disabled:cursor-not-allowed transition-smooth"
+          >
+            {discovering ? t('provider.discovering') : t('provider.discoverModels')}
+          </button>
+        </div>
+        {discoveryError && (
+          <div className="rounded-md border border-red-500/20 bg-red-500/5 px-2.5 py-2 text-xs text-red-400 break-words">
+            {discoveryError}
+          </div>
+        )}
+        {discoveredModels.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2 text-xs text-text-tertiary">
+              <span>{t('provider.discoveryCount').replace('{count}', String(discoveredModels.length))}</span>
+              <span className="truncate font-mono" title={discoveryEndpoint}>{discoveryEndpoint}</span>
+            </div>
+            <div className="max-h-44 overflow-y-auto rounded-md border border-border-subtle bg-bg-secondary/40 p-1.5 grid grid-cols-1 sm:grid-cols-2 gap-1">
+              {discoveredModels.map((model) => (
+                <label key={model} className="flex min-w-0 cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-bg-secondary">
+                  <input
+                    type="checkbox"
+                    checked={selectedDiscovered.has(model)}
+                    onChange={() => toggleDiscoveredModel(model)}
+                    className="h-3.5 w-3.5 accent-accent"
+                  />
+                  <span className="truncate text-xs font-mono text-text-primary" title={model}>{model}</span>
+                </label>
+              ))}
+            </div>
+            <button
+              onClick={addDiscoveredModels}
+              disabled={selectedDiscovered.size === 0}
+              className="px-3 py-1.5 rounded-md bg-accent text-text-inverse text-xs font-medium hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-smooth"
+            >
+              {t('provider.addSelectedModels').replace('{count}', String(selectedDiscovered.size))}
+            </button>
+            {addFeedback && (
+              <span className="text-xs text-green-500">{addFeedback}</span>
+            )}
+          </div>
+        )}
+      </section>
+
       {/* Proxy URL */}
       <div>
         <label className="text-xs text-text-muted mb-1 block">{t('provider.proxyUrl')}</label>
@@ -371,21 +464,12 @@ export function ProviderForm({ provider, onClose, onDelete, autoTest, onTestStat
         <label className="text-xs text-text-muted mb-1 block">{t('provider.modelMappings')}</label>
         <p className="text-xs text-text-tertiary mb-1.5">{t('provider.modelMappingsHint')}</p>
         <div className="space-y-1.5">
-          {MODEL_TIERS.map(({ tier, labelKey, placeholderKey }) => (
-            <div key={tier} className="flex items-center gap-2">
-              <span className="text-xs text-text-muted w-14 shrink-0">{t(labelKey)}</span>
-              <input className={INPUT_CLASS}
-                value={getMapping(tier)}
-                onChange={(e) => updateMapping(tier, e.target.value)}
-                placeholder={t(placeholderKey)} />
-            </div>
-          ))}
           {extraMappings.map((m, i) => (
             <div key={`extra-${i}`} className="flex items-center gap-1.5">
               <input className="flex-1 min-w-0 px-3 py-2 text-[13px] bg-bg-chat border border-border-subtle rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent font-mono"
                 value={m.providerModel}
                 onChange={(e) => updateExtraModel(m.tier, e.target.value)}
-                placeholder={t('provider.extraModelPlaceholder')} />
+                placeholder={t('provider.modelNamePlaceholder')} />
               <button onClick={() => removeExtraMapping(m.tier)}
                 className="text-text-tertiary hover:text-text-primary transition-smooth shrink-0 p-0.5">
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none"

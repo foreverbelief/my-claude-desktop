@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
 import {
   DEEPSEEK_V4_FLASH,
   DEEPSEEK_V4_FLASH_LABEL,
@@ -184,6 +184,18 @@ function nextTheme(current: Theme): Theme {
 
 // --- Store ---
 
+// M11: wrap localStorage with try/catch — settings include large base64 blobs
+// (customBgImage, avatars) that can exceed the 5MB quota; a throwing setItem
+// would otherwise break every settings write after the quota is hit.
+const safeStorage: Storage = {
+  get length() { return localStorage.length; },
+  clear: () => { try { localStorage.clear(); } catch { /* ignore */ } },
+  getItem: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
+  key: (i) => { try { return localStorage.key(i); } catch { return null; } },
+  removeItem: (k) => { try { localStorage.removeItem(k); } catch { /* ignore */ } },
+  setItem: (k, v) => { try { localStorage.setItem(k, v); } catch { console.warn('[settingsStore] localStorage write failed (quota?)', k); } },
+};
+
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
@@ -198,7 +210,7 @@ export const useSettingsStore = create<SettingsState>()(
       agentPanelOpen: false,
       workingDirectory: '',
       selectedModel: 'claude-sonnet-4-6',
-      sessionMode: 'bypass',
+      sessionMode: 'code',
       locale: 'zh',
       fontSize: 18,
       fontFamily: 'microsoft',
@@ -353,6 +365,7 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: 'mycode-settings',
       version: 12,
+      storage: createJSONStorage(() => safeStorage),
       migrate: (persistedState: unknown, version: number) => {
         const persisted = persistedState as Record<string, unknown>;
         if (version === 0) {
@@ -386,8 +399,12 @@ export const useSettingsStore = create<SettingsState>()(
           delete persisted.thinkingEnabled;
         }
         if (version < 5) {
-          // Force default mode to bypass — old versions may have persisted 'code'/'ask'
-          persisted.sessionMode = 'bypass';
+          // S1: previously this forced sessionMode to 'bypass' (dangerous
+          // full-auto). No longer forced — default is now 'code'; users who
+          // want bypass opt in via the confirm dialog.
+          if (persisted.sessionMode === 'bypass') {
+            persisted.sessionMode = 'code';
+          }
         }
         if (version < 6) {
           // Fix Haiku model ID: claude-haiku-4-5 → claude-haiku-4-5-20251001

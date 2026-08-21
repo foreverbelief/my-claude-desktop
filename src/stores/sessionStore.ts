@@ -16,7 +16,12 @@ function loadCustomPreviewsSync(): Record<string, string> {
 }
 
 function saveCustomPreviewsLocal(map: Record<string, string>) {
-  localStorage.setItem(CUSTOM_PREVIEWS_KEY, JSON.stringify(map));
+  try {
+    localStorage.setItem(CUSTOM_PREVIEWS_KEY, JSON.stringify(map));
+  } catch (e) {
+    // M11: localStorage quota exceeded — silently degrade to in-memory only
+    console.warn('[sessionStore] localStorage write failed:', e);
+  }
 }
 
 /** Persist the last active session ID so app restart can auto-restore */
@@ -140,7 +145,9 @@ export const useSessionStore = create<SessionState>()((set, get) => ({
   },
 
   addDraftSession: (id, projectPath) => set((state) => {
-    const projectDir = projectPath.replace(/\//g, '-');
+    // M10: replace BOTH path separators so Windows "D:\foo\bar" encodes
+    // consistently to "D:-foo-bar" (App.tsx decodes /^[A-Za-z]-/ forms).
+    const projectDir = projectPath.replace(/[\\/]/g, '-');
     const draft: SessionListItem = {
       id,
       path: '',
@@ -158,7 +165,7 @@ export const useSessionStore = create<SessionState>()((set, get) => ({
   updateDraftProject: (id, projectPath) => set((state) => ({
     sessions: state.sessions.map((s) =>
       s.id === id
-        ? { ...s, project: projectPath, projectDir: projectPath.replace(/\//g, '-'), modifiedAt: Date.now() }
+        ? { ...s, project: projectPath, projectDir: projectPath.replace(/[\\/]/g, '-'), modifiedAt: Date.now() }
         : s,
     ),
   })),

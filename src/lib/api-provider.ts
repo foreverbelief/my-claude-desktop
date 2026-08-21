@@ -2,7 +2,8 @@ import { useProviderStore } from '../stores/providerStore';
 import type { ModelId } from '../stores/settingsStore';
 import {
   DEEPSEEK_V4_FLASH,
-  DEEPSEEK_V4_PRO,
+  isDeepSeekV4FlashFamily,
+  isDeepSeekV4ProFamily,
   normalizeDeepSeekModelName,
   normalizeProviderModelName,
 } from './deepseek-models';
@@ -45,29 +46,25 @@ export function resolveModelOrError(selectedModel: string): ModelResolution {
 
   // 2. Fall back to tier mapping
   const tier = TIER_MAP[selectedModel];
-  if (!tier) {
-    const fallback = provider.modelMappings.find(
-      (m) => m.tier === 'sonnet' && m.providerModel,
-    ) || provider.modelMappings.find(
-      (m) => m.tier === 'haiku' && m.providerModel,
-    ) || provider.modelMappings.find(
-      (m) => m.tier === 'opus' && m.providerModel,
-    ) || provider.modelMappings.find((m) => m.providerModel);
-
-    if (fallback?.providerModel) {
-      return { ok: true, model: normalizeProviderModelName(fallback.providerModel) };
+  if (tier) {
+    const mapping = provider.modelMappings.find(
+      (m) => m.tier === tier && m.providerModel,
+    );
+    if (mapping?.providerModel) {
+      return { ok: true, model: normalizeProviderModelName(mapping.providerModel) };
     }
-
-    return { ok: false, reason: 'no_mapping', tier: selectedModel, providerName: provider.name };
   }
 
-  const mapping = provider.modelMappings.find(
-    (m) => m.tier === tier && m.providerModel,
-  );
-  if (!mapping?.providerModel) {
-    return { ok: false, reason: 'no_mapping', tier, providerName: provider.name };
-  }
-  return { ok: true, model: normalizeProviderModelName(mapping.providerModel) };
+  // NOTE: intentionally NO "any-mapping" fallback here. Previously a fallback
+  // that grabbed the first configured model (e.g. an extra mapping like
+  // `deepseek-v4-flash`) silently rewrote a selected Claude tier (e.g.
+  // claude-sonnet-4-6) into an unrelated provider model, causing confusing
+  // "422 Model Not Exist: <unexpected-name>" API errors. Strict resolution:
+  // if the selected model's tier has no mapping, surface no_mapping so the UI
+  // shows a clear "provider has no mapping for this model" message instead of
+  // sending the wrong model name.
+
+  return { ok: false, reason: 'no_mapping', tier: selectedModel, providerName: provider.name };
 }
 
 /**
@@ -87,8 +84,8 @@ export function resolveModelForProvider(selectedModel: string): string {
 }
 
 export function supportsDeepSeekThinking(model: string): boolean {
-  const normalized = normalizeProviderModelName(model);
-  return normalized === DEEPSEEK_V4_PRO || normalized === DEEPSEEK_V4_FLASH;
+  // Family detection: also matches concrete variants like "DeepSeek-V4-Flash-0731".
+  return isDeepSeekV4ProFamily(model) || isDeepSeekV4FlashFamily(model);
 }
 
 export function resolveThinkingLevelForProvider(selectedModel: string, requestedLevel: string): string {

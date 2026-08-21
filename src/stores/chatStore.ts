@@ -288,10 +288,12 @@ function updateTab(
 /**
  * React hook: select a field from the active tab.
  * Usage: `useActiveTab(t => t.messages)`
+ * M17 fix: subscribes to sessionStore.selectedSessionId so the component
+ * re-renders on tab switch without relying on the key prop remounting.
  */
 export function useActiveTab<T>(selector: (tab: TabSession) => T): T {
+  const tabId = useSessionStore((s) => s.selectedSessionId);
   return useChatStore((state) => {
-    const tabId = useSessionStore.getState().selectedSessionId;
     const tab = tabId ? state.tabs.get(tabId) : undefined;
     return selector(tab ?? EMPTY_TAB);
   });
@@ -555,8 +557,18 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   // ------------------------------------------------------------------
 
   ensureTab: (tabId) => {
-    if (get().tabs.has(tabId)) return;
-    const newTabs = new Map(get().tabs);
+    const tabs = get().tabs;
+    // M18 fix: true LRU — re-inserting an existing tab moves it to the end of
+    // the Map (most-recently-used), so eviction order reflects actual access.
+    if (tabs.has(tabId)) {
+      const newTabs = new Map(tabs);
+      const tab = newTabs.get(tabId)!;
+      newTabs.delete(tabId);
+      newTabs.set(tabId, tab);
+      set({ tabs: newTabs, sessionCache: newTabs });
+      return;
+    }
+    const newTabs = new Map(tabs);
     newTabs.set(tabId, createTab(tabId));
     // LRU eviction — keep at most MAX_CACHE tabs
     // Never evict tabs that are actively streaming — their disk JSONL may have

@@ -56,3 +56,6 @@ package-lock.json
 
 # Trellis workflow tool
 .trellis/
+
+# Backup binaries
+*.bak-*

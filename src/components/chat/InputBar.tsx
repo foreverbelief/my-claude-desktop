@@ -367,6 +367,21 @@ export function InputBar() {
     return () => window.removeEventListener('mycode:rewind', handler);
   }, [canRewind, t]);
 
+  // Edit message → resend: MessageBubble rewinds the conversation to the edited
+  // message and dispatches mycode:edit-resend with the new text. We fill the
+  // input box and submit it like a normal user message.
+  useEffect(() => {
+    const onEditResend = (e: Event) => {
+      const text = (e as CustomEvent<string>).detail;
+      if (typeof text !== 'string' || !text.trim()) return;
+      setInputSync(text);
+      // Defer one frame so the store state settles before submit reads it.
+      requestAnimationFrame(() => handleSubmitRef.current());
+    };
+    window.addEventListener('mycode:edit-resend', onEditResend);
+    return () => window.removeEventListener('mycode:edit-resend', onEditResend);
+  }, [setInputSync]);
+
   // Double-Esc rewind shortcut disabled (#36 / #71) — rewind feature is hidden in MY-CODE
 
   // Drag state (file drop)

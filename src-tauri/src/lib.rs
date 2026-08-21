@@ -1020,7 +1020,7 @@ fn provider_messages_endpoint(base_url: &str, api_format: &str) -> String {
         } else if lower.ends_with("/v1") {
             format!("{}/chat/completions", base)
         } else {
-            format!("{}/chat/completions", base)
+            format!("{}/v1/chat/completions", base)
         }
     } else if lower.ends_with("/v1/messages") {
         base.to_string()
@@ -1029,6 +1029,110 @@ fn provider_messages_endpoint(base_url: &str, api_format: &str) -> String {
     } else {
         format!("{}/v1/messages", base)
     }
+}
+
+fn provider_models_endpoint(base_url: &str) -> String {
+    let base = base_url.trim().trim_end_matches('/');
+    let lower = base.to_lowercase();
+    if lower.ends_with("/v1/chat/completions") || lower.ends_with("/chat/completions") {
+        format!("{}/models", &base[..base.len() - "/chat/completions".len()])
+    } else if lower.ends_with("/v1/messages") {
+        format!("{}/models", &base[..base.len() - "/messages".len()])
+    } else if lower.ends_with("/v1") {
+        format!("{}/models", base)
+    } else {
+        format!("{}/v1/models", base)
+    }
+}
+
+async fn build_provider_http_client(proxy_url: Option<&str>) -> reqwest::Client {
+    if let Some(purl) = proxy_url.filter(|url| !url.trim().is_empty()) {
+        if let Ok(proxy) = reqwest::Proxy::all(purl) {
+            if is_proxy_reachable(purl).await {
+                if let Ok(client) = reqwest::Client::builder()
+                    .connect_timeout(std::time::Duration::from_secs(10))
+                    .timeout(std::time::Duration::from_secs(30))
+                    .user_agent("Mozilla/5.0 MY-CODE/1.0")
+                    .no_proxy()
+                    .proxy(proxy)
+                    .build()
+                {
+                    return client;
+                }
+            }
+        }
+    }
+
+    build_smart_http_client(
+        std::time::Duration::from_secs(10),
+        std::time::Duration::from_secs(30),
+    )
+    .await
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ModelDiscoveryResult {
+    models: Vec<String>,
+    endpoint: String,
+}
+
+fn parse_discovered_models(json: &Value) -> Vec<String> {
+    let items = json
+        .get("data")
+        .and_then(Value::as_array)
+        .or_else(|| json.get("models").and_then(Value::as_array));
+    let mut models: Vec<String> = items
+        .into_iter()
+        .flatten()
+        .filter_map(|item| {
+            item.as_str()
+                .map(str::to_string)
+                .or_else(|| item.get("id").and_then(Value::as_str).map(str::to_string))
+                .or_else(|| item.get("name").and_then(Value::as_str).map(str::to_string))
+        })
+        .filter(|model| !model.trim().is_empty())
+        .collect();
+    models.sort_by_key(|model| model.to_lowercase());
+    models.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+    models
+}
+
+#[tauri::command]
+async fn discover_provider_models(
+    base_url: String,
+    api_format: String,
+    api_key: String,
+    proxy_url: Option<String>,
+) -> Result<ModelDiscoveryResult, String> {
+    if base_url.trim().is_empty() || api_key.trim().is_empty() {
+        return Err("API endpoint and API key are required".to_string());
+    }
+    let endpoint = provider_models_endpoint(&base_url);
+    let client = build_provider_http_client(proxy_url.as_deref()).await;
+    let mut request = client
+        .get(&endpoint)
+        .header("Accept", "application/json")
+        .header("Accept-Encoding", "identity");
+    if api_format.eq_ignore_ascii_case("openai") {
+        request = request.header("Authorization", format!("Bearer {}", api_key.trim()));
+    } else {
+        request = request
+            .header("x-api-key", api_key.trim())
+            .header("anthropic-version", "2023-06-01");
+    }
+    let response = request.send().await.map_err(|e| format!("Model discovery request failed: {}", e))?;
+    let status = response.status();
+    let text = response.text().await.map_err(|e| format!("Cannot read model discovery response: {}", e))?;
+    if !status.is_success() {
+        return Err(format!("Model discovery returned HTTP {}: {}", status.as_u16(), text.chars().take(300).collect::<String>()));
+    }
+    let json: Value = serde_json::from_str(&text).map_err(|_| format!("The models endpoint returned non-JSON content (tried {}).", endpoint))?;
+    let models = parse_discovered_models(&json);
+    if models.is_empty() {
+        return Err(format!("No usable model IDs found at {}", endpoint));
+    }
+    Ok(ModelDiscoveryResult { models, endpoint })
 }
 
 #[tauri::command]
@@ -1125,6 +1229,9 @@ async fn test_provider_connection(
     let mut test_req = client
         .post(&connectivity_url)
         .header("Content-Type", "application/json")
+        .header("Accept", "application/json")
+        .header("Accept-Encoding", "identity")
+        .header("User-Agent", "Mozilla/5.0 MY-CODE/1.0")
         .json(&test_body)
         .timeout(std::time::Duration::from_secs(15));
     if api_format == "openai" {
@@ -1138,9 +1245,14 @@ async fn test_provider_connection(
     let (auth, model_step) = match test_resp {
         Ok(resp) => {
             let status = resp.status().as_u16();
+            let text = resp.text().await.unwrap_or_default();
+            // Some third-party endpoints answer every POST with an HTML landing
+            // page and HTTP 200. That is NOT a real model success, so treat any
+            // 2xx response that is not valid JSON as a failure instead of a pass.
+            let looks_like_json = text.trim_start().starts_with('{')
+                || text.trim_start().starts_with('[');
             if status == 401 {
                 // Definitely auth failure
-                let text = resp.text().await.unwrap_or_default();
                 (
                     StepResult {
                         ok: false,
@@ -1151,7 +1263,6 @@ async fn test_provider_connection(
             } else if status == 403 {
                 // 403 is ambiguous: could be auth failure OR model access restriction.
                 // Read body to disambiguate.
-                let text = resp.text().await.unwrap_or_default();
                 let text_lower = text.to_lowercase();
                 let is_auth_error = text_lower.contains("invalid")
                     && (text_lower.contains("api key") || text_lower.contains("api_key")
@@ -1168,14 +1279,13 @@ async fn test_provider_connection(
                         StepResult { ok: false, message: format!("HTTP 403 — {}", text.chars().take(200).collect::<String>()) },
                     )
                 }
-            } else if status >= 200 && status < 300 {
+            } else if status >= 200 && status < 300 && looks_like_json {
                 (
                     StepResult { ok: true, message: format!("Authenticated (HTTP {})", status) },
                     StepResult { ok: true, message: format!("Model OK (HTTP {})", status) },
                 )
             } else {
-                // 400, 404, 429, 500, etc. — auth is OK (server processed the request)
-                let text = resp.text().await.unwrap_or_default();
+                // 400, 404, 429, 500, etc., or a 200 that returned a non-JSON page.
                 let text_lower = text.to_lowercase();
                 let is_model_error = (status == 404)
                     || (text_lower.contains("model")
@@ -1238,6 +1348,24 @@ fn resolve_provider_env(
     if let Some(ref key) = provider.api_key {
         if !key.is_empty() {
             env.insert("ANTHROPIC_API_KEY".to_string(), key.clone());
+        }
+    }
+
+    // Claude CLI can issue follow-up requests with its own tier names. Always
+    // provide the provider's real model IDs for every tier so no internal name
+    // (opus/sonnet/haiku) reaches a third-party endpoint.
+    for (tier, env_name) in [
+        ("opus", "ANTHROPIC_DEFAULT_OPUS_MODEL"),
+        ("sonnet", "ANTHROPIC_DEFAULT_SONNET_MODEL"),
+        ("haiku", "ANTHROPIC_DEFAULT_HAIKU_MODEL"),
+    ] {
+        if let Some(model) = provider
+            .model_mappings
+            .iter()
+            .find(|mapping| mapping.tier.eq_ignore_ascii_case(tier) && !mapping.provider_model.trim().is_empty())
+            .map(|mapping| provider_model_name(&mapping.provider_model))
+        {
+            env.insert(env_name.to_string(), model);
         }
     }
 
@@ -1350,15 +1478,15 @@ async fn start_claude_session(
     args.push("stdio".to_string());
 
     // Extended thinking + effort level
+    // NOTE: the actual --settings arg is appended after resolved_env is built
+    // (see below), because we merge the provider env into the settings JSON.
+    // Claude Code's user settings (~/.claude/settings.json) env entries OVERRIDE
+    // process environment variables, so env vars set here on the child process
+    // are silently ignored when the same key exists in user settings. The only
+    // reliable way to force a provider's base URL/key/model onto the CLI is to
+    // pass them through --settings' "env" object, which takes precedence over
+    // the settings file.
     let thinking_level = params.thinking_level.as_deref().unwrap_or("high");
-    if thinking_level == "off" {
-        // Explicitly disable thinking — CLI defaults to enabled, so we must pass false
-        args.push("--settings".to_string());
-        args.push(r#"{"alwaysThinkingEnabled":false}"#.to_string());
-    } else {
-        args.push("--settings".to_string());
-        args.push(r#"{"alwaysThinkingEnabled":true}"#.to_string());
-    }
 
     // Resolve claude binary — it may not be on the default PATH
     let claude_bin = find_claude_binary().unwrap_or_else(|| {
@@ -1487,6 +1615,78 @@ async fn start_claude_session(
             }
         }
     }
+
+    // ============================================================
+    // Build --settings JSON with thinking config + provider env override.
+    //
+    // Claude Code's user settings (~/.claude/settings.json) env entries
+    // OVERRIDE environment variables on the child process. The only way
+    // to force a provider's base URL/key/model onto the CLI is to pass
+    // them through --settings' "env" object, which takes precedence over
+    // the settings file. This also registers the model name in the CLI's
+    // known-model list, bypassing its local validation (which rejects
+    // lowercase model names like "deepseek-v4-flash").
+    // ============================================================
+    let mut settings_env = serde_json::Map::new();
+    for (k, v) in &resolved_env {
+        settings_env.insert(k.clone(), serde_json::Value::String(v.clone()));
+    }
+    // Ensure the CLI's local model-validation knows about the model name.
+    // Passing --model <name> alone is not enough — the CLI validates it
+    // against its known-model list (built from env entries like
+    // ANTHROPIC_MODEL, ANTHROPIC_SMALL_FAST_MODEL, etc.). Registering it
+    // here lets the CLI accept any model name, even lowercase ones.
+    if let Some(ref model) = params.model {
+        settings_env
+            .entry("ANTHROPIC_MODEL".to_string())
+            .or_insert_with(|| serde_json::Value::String(model.clone()));
+        settings_env
+            .entry("ANTHROPIC_SMALL_FAST_MODEL".to_string())
+            .or_insert_with(|| serde_json::Value::String(model.clone()));
+    }
+    // Also register the tier model names, so follow-up requests that use
+    // opus/sonnet/haiku tier names don't get rejected by the CLI.
+    for env_name in [
+        "ANTHROPIC_DEFAULT_OPUS_MODEL",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+    ] {
+        if !settings_env.contains_key(env_name) {
+            // If the provider has no mapping for this tier, let the CLI
+            // fall back to the overall model name so the model is still
+            // registered in the known-model list.
+            if let Some(ref model) = params.model {
+                settings_env
+                    .insert(env_name.to_string(), serde_json::Value::String(model.clone()));
+            }
+        }
+    }
+    // Clear settings entries that would conflict with our provider config.
+    // The most common offender is ANTHROPIC_AUTH_TOKEN, which users may have
+    // set in ~/.claude/settings.json when configuring a previous provider.
+    // AUTH_TOKEN triggers OAuth/Bearer auth in the CLI, which third-party
+    // providers don't support (they expect x-api-key via ANTHROPIC_API_KEY).
+    // Setting it to empty string via --settings env effectively clears it.
+    for key in &inherited_keys_to_remove {
+        settings_env.insert(key.clone(), serde_json::Value::String(String::new()));
+    }
+    // If the user's settings.json has ANTHROPIC_AUTH_TOKEN but the provider
+    // uses API_KEY (and no explicit inherited_keys_to_remove for it), still
+    // clear AUTH_TOKEN to prevent OAuth interference.
+    if !settings_env.contains_key("ANTHROPIC_AUTH_TOKEN")
+        && settings_env.contains_key("ANTHROPIC_API_KEY")
+    {
+        settings_env.insert(
+            "ANTHROPIC_AUTH_TOKEN".to_string(),
+            serde_json::Value::String(String::new()),
+        );
+    }
+    let mut settings_json = serde_json::json!({
+        "alwaysThinkingEnabled": thinking_level != "off",
+    });
+    settings_json["env"] = serde_json::Value::Object(settings_env);
+    args.push("--settings".to_string());
+    args.push(settings_json.to_string());
 
     // On Windows, .cmd/.bat files must be launched via cmd /C
     #[cfg(target_os = "windows")]
@@ -1658,7 +1858,12 @@ async fn start_claude_session(
     );
     eprintln!("[MY-CODE] args: {:?}", &args);
     eprintln!("[MY-CODE] PATH: {}", &enriched_path);
-    eprintln!("[MY-CODE] resolved_env: {:?}", &resolved_env);
+    // S4: never log env values — they contain API keys / secrets in plaintext.
+    // Log only the env var NAMES so debugging still shows what was injected.
+    eprintln!(
+        "[MY-CODE] resolved_env_keys: {:?}",
+        resolved_env.keys().collect::<Vec<_>>()
+    );
     eprintln!("[MY-CODE] cwd: {}", &params.cwd);
 
     // Capture stdin and store in StdinManager for sending follow-up messages
@@ -2274,8 +2479,27 @@ async fn delete_session(session_id: String, session_path: String) -> Result<(), 
                     canonical
                 ));
             }
-            std::fs::remove_file(&canonical)
-                .map_err(|e| format!("Failed to delete session file: {}", e))?;
+            // Retry a few times: the CLI process may have just been killed and
+            // Windows can keep the file handle open for a short moment after
+            // taskkill /T /F returns. A tiny backoff makes single-click delete
+            // reliable instead of requiring the user to click delete repeatedly.
+            let mut last_err = None;
+            for attempt in 0..5 {
+                match std::fs::remove_file(&canonical) {
+                    Ok(_) => {
+                        last_err = None;
+                        break;
+                    }
+                    Err(e) => {
+                        last_err = Some(e);
+                        tokio::time::sleep(std::time::Duration::from_millis(50 * (attempt + 1)))
+                            .await;
+                    }
+                }
+            }
+            if let Some(e) = last_err {
+                return Err(format!("Failed to delete session file: {}", e));
+            }
         }
     }
     Ok(())
@@ -3028,29 +3252,15 @@ async fn reveal_in_finder(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn open_with_default_app(path: String) -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        Command::new("open")
-            .arg(&path)
-            .spawn()
-            .map_err(|e| format!("Failed to open file: {}", e))?;
-    }
-    #[cfg(target_os = "windows")]
-    {
-        Command::new("cmd")
-            .args(["/C", "start", "", &path])
-            .creation_flags(0x08000000)
-            .spawn()
-            .map_err(|e| format!("Failed to open file: {}", e))?;
-    }
-    #[cfg(target_os = "linux")]
-    {
-        Command::new("xdg-open")
-            .arg(&path)
-            .spawn()
-            .map_err(|e| format!("Failed to open file: {}", e))?;
-    }
+async fn open_with_default_app(app: AppHandle, path: String) -> Result<(), String> {
+    // M3 fix: use the opener plugin on all platforms instead of shelling out to
+    // `cmd /C start` (Windows) — a path containing cmd metacharacters (& | etc.)
+    // could previously be interpreted as extra commands. open_path passes the
+    // path to the OS default handler without any shell interpretation.
+    use tauri_plugin_opener::OpenerExt;
+    app.opener()
+        .open_path(&path, None::<&str>)
+        .map_err(|e| format!("Failed to open file: {}", e))?;
     Ok(())
 }
 
@@ -4317,7 +4527,7 @@ fn resolve_translation_model(provider: &ApiProvider) -> String {
             .iter()
             .find(|mapping| mapping.tier.to_lowercase().contains(tier) && !mapping.provider_model.trim().is_empty())
         {
-            return normalize_deepseek_model_name(&mapping.provider_model);
+            return provider_model_name(&mapping.provider_model);
         }
     }
 
@@ -4325,7 +4535,7 @@ fn resolve_translation_model(provider: &ApiProvider) -> String {
         .model_mappings
         .iter()
         .find(|mapping| !mapping.provider_model.trim().is_empty())
-        .map(|mapping| normalize_deepseek_model_name(&mapping.provider_model))
+        .map(|mapping| provider_model_name(&mapping.provider_model))
         .unwrap_or_else(|| "deepseek-v4-flash".to_string())
 }
 
@@ -7500,28 +7710,8 @@ async fn save_archived_sessions(data: Value) -> Result<(), String> {
     std::fs::write(&path, content).map_err(|e| format!("Failed to write archived sessions: {}", e))
 }
 
-fn normalize_deepseek_model_name(model: &str) -> String {
-    let trimmed = model.trim();
-    let lower = trimmed.to_lowercase();
-    let compact: String = lower
-        .chars()
-        .filter(|c| !matches!(c, ' ' | '_' | '.' | '(' | ')' | '[' | ']' | '-'))
-        .collect();
-
-    if compact.contains("deepseekv4pro") {
-        return "deepseek-v4-pro".to_string();
-    }
-    if compact.contains("deepseekv4flash") {
-        return "deepseek-v4-flash".to_string();
-    }
-    if lower.contains("fable") || lower.contains("opus") || compact.contains("claudeopus") {
-        return "deepseek-v4-pro".to_string();
-    }
-    if lower.contains("sonnet") || lower.contains("haiku") || compact.contains("claudesonnet") || compact.contains("claudehaiku") {
-        return "deepseek-v4-flash".to_string();
-    }
-
-    trimmed.to_string()
+fn provider_model_name(model: &str) -> String {
+    model.trim().to_string()
 }
 
 /// Generate a short AI title for a session by spawning a separate Claude CLI process.
@@ -7566,7 +7756,7 @@ async fn generate_session_title(
                 .map(|m| m.provider_model.clone())
         });
         match haiku_model {
-            Some(m) => (env, keys, normalize_deepseek_model_name(&m)),
+            Some(m) => (env, keys, provider_model_name(&m)),
             None => return Err("SKIP: no haiku mapping for provider".to_string()),
         }
     } else {
@@ -7583,6 +7773,9 @@ async fn generate_session_title(
     let enriched_path = build_enriched_path();
 
     // Spawn a one-shot CLI process: -p for single prompt, --output-format json for structured output
+    // M4: removed --dangerously-skip-permissions — title generation is a pure
+    // text prompt with --max-turns 1 and never invokes tools, so skipping ALL
+    // permissions was an unnecessary escalation of privilege.
     let args = vec![
         "-p".to_string(),
         prompt,
@@ -7592,7 +7785,6 @@ async fn generate_session_title(
         "json".to_string(),
         "--max-turns".to_string(),
         "1".to_string(),
-        "--dangerously-skip-permissions".to_string(),
     ];
 
     let mut cmd = tokio::process::Command::new(&claude_bin);
@@ -7906,6 +8098,7 @@ pub fn run() {
             generate_session_title,
             load_providers,
             save_providers,
+            discover_provider_models,
             test_provider_connection,
             respond_permission,
             send_control_request,
@@ -7916,13 +8109,13 @@ pub fn run() {
 
 #[cfg(test)]
 mod decode_tests {
-    use super::{decode_project_name, provider_messages_endpoint};
+    use super::{decode_project_name, provider_messages_endpoint, provider_models_endpoint};
 
     #[test]
     fn test_openai_endpoint_keeps_deepseek_bare_base_url() {
         assert_eq!(
             provider_messages_endpoint("https://api.deepseek.com", "openai"),
-            "https://api.deepseek.com/chat/completions"
+            "https://api.deepseek.com/v1/chat/completions"
         );
     }
 
@@ -7939,6 +8132,30 @@ mod decode_tests {
         assert_eq!(
             provider_messages_endpoint("https://api.deepseek.com/v1/chat/completions", "openai"),
             "https://api.deepseek.com/v1/chat/completions"
+        );
+    }
+
+    #[test]
+    fn test_models_endpoint_bare_root() {
+        assert_eq!(
+            provider_models_endpoint("https://xtapi.site"),
+            "https://xtapi.site/v1/models"
+        );
+    }
+
+    #[test]
+    fn test_models_endpoint_v1() {
+        assert_eq!(
+            provider_models_endpoint("https://api.deepseek.com/v1"),
+            "https://api.deepseek.com/v1/models"
+        );
+    }
+
+    #[test]
+    fn test_models_endpoint_chat_completions() {
+        assert_eq!(
+            provider_models_endpoint("https://api.deepseek.com/v1/chat/completions"),
+            "https://api.deepseek.com/v1/models"
         );
     }
 

@@ -92,6 +92,11 @@ async function readFileAsBytes(file: File): Promise<Uint8Array> {
   });
 }
 
+/** H4: cap attachment size — files above this limit are rejected instead of
+ *  being read fully into memory, expanded into a JS number[] and pushed through
+ *  IPC (which froze the main thread for large files). */
+const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024; // 20MB
+
 // --- Hook ---
 
 export function useFileAttachments() {
@@ -106,6 +111,11 @@ export function useFileAttachments() {
 
       for (const file of fileArray) {
         try {
+          // H4: reject oversized attachments early with a clear message
+          if (file.size > MAX_ATTACHMENT_BYTES) {
+            console.warn(`[attachments] Skipped ${file.name}: ${(file.size / 1024 / 1024).toFixed(1)}MB > 20MB limit`);
+            continue;
+          }
           // Generate thumbnail for images
           const preview = await generateThumbnail(file);
 
@@ -218,7 +228,13 @@ export function useFileAttachments() {
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
-    getCurrentWindow().onDragDropEvent((event) => {
+    let unlistenPromise: Promise<(() => void) | void>;
+    // H5 fix: onDragDropEvent returns a promise; when the component unmounts
+    // before that promise resolves, `unlisten` is still undefined and the
+    // cleanup runs a no-op, permanently leaking the listener.
+    // We capture the promise and in cleanup: if unlisten() is ready, call it;
+    // otherwise chain the cleanup onto the promise.
+    unlistenPromise = getCurrentWindow().onDragDropEvent((event) => {
       const { type } = event.payload;
 
       if (type === 'over' || type === 'enter') {
@@ -299,7 +315,15 @@ export function useFileAttachments() {
         }
       }
     }).then((fn) => { unlisten = fn; });
-    return () => { unlisten?.(); };
+    return () => {
+      // H5: if the promise resolved, call the stored unlisten; otherwise
+      // chain cleanup onto the pending promise to avoid a gap leak.
+      if (unlisten) {
+        unlisten();
+      } else {
+        unlistenPromise?.then((fn) => { if (typeof fn === 'function') fn(); });
+      }
+    };
   }, []);
 
   const removeFile = useCallback((id: string) => {

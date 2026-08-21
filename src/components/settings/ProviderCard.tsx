@@ -14,6 +14,7 @@ interface ProviderCardProps {
   onRequestDelete: () => void;
   onExport: () => void;
   onTest: () => void;
+  onDiscover: () => void;
 }
 
 export function ProviderCard({
@@ -27,6 +28,7 @@ export function ProviderCard({
   onRequestDelete,
   onExport,
   onTest,
+  onDiscover,
 }: ProviderCardProps) {
   const t = useT();
 
@@ -115,6 +117,23 @@ export function ProviderCard({
         ) : (
           t('provider.testConnection')
         )}
+      </button>
+
+      {/* Discover models button — opens the form and auto-detects models */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onDiscover(); }}
+        className="shrink-0 px-2 py-1 rounded-md text-[11px] font-medium transition-smooth
+          border border-accent/25 bg-accent/5 text-accent hover:bg-accent/10"
+        title={t('provider.discoverModels')}
+      >
+        <span className="flex items-center gap-1">
+          <svg width="9" height="9" viewBox="0 0 16 16" fill="none"
+            stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+            <path d="M8 2v12M2 8h12" />
+            <path d="M2 3l2 2M14 3l-2 2M2 13l2-2M14 13l-2-2" />
+          </svg>
+          {t('provider.discoverModels')}
+        </span>
       </button>
 
       {/* Action buttons — hover to reveal */}

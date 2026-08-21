@@ -1092,7 +1092,14 @@ async function startDraftSession(folderPath: string) {
       bridge.trackSession(session.session_id).catch(() => {});
     }
   } catch {
-    // Pre-warm failed — InputBar will spawn on first message instead
+    // Pre-warm failed — InputBar will spawn on first message instead.
+    // M12: clean up the listeners we registered before the failure, otherwise
+    // they leak permanently (preWarmId is never stored in meta, so no one
+    // knows to clean them).
+    if ((window as any).__claudeUnlisteners?.[preWarmId]) {
+      (window as any).__claudeUnlisteners[preWarmId]();
+      delete (window as any).__claudeUnlisteners[preWarmId];
+    }
   }
 }
 

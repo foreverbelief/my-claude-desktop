@@ -121,11 +121,14 @@ export function parseSessionMessages(rawMessages: any[]): LoadedSession {
     } else if (msg.type === 'assistant') {
       const blocks = msg.message?.content;
       if (Array.isArray(blocks)) {
-        for (const block of blocks) {
+        for (const [blockIdx, block] of blocks.entries()) {
           if (block.type === 'text') {
             if (isSystemText(block.text || '')) continue;
             messages.push({
-              id: msg.uuid || generateMessageId(),
+              // M9 fix: multiple text blocks in one assistant message must get
+              // distinct ids — addMessage dedupes by id, so sharing msg.uuid
+              // would silently drop all but the last block.
+              id: msg.uuid ? `${msg.uuid}_text_${blockIdx}` : generateMessageId(),
               role: 'assistant',
               type: 'text',
               content: block.text,

@@ -6,6 +6,9 @@ use tokio::io::AsyncWriteExt;
 use tokio::process::{Child, ChildStdin};
 use tokio::sync::Mutex;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SessionInfo {
     pub session_id: String,
@@ -83,13 +86,36 @@ impl ProcessManager {
     pub async fn remove(&self, id: &str) {
         let mut map = self.processes.lock().await;
         if let Some(proc) = map.remove(id) {
-            // Actually kill the child process to prevent zombie leaks (P0-2 fix)
+            // Actually kill the child process to prevent zombie leaks (P0-2 fix).
             let mut managed = proc.lock().await;
-            if let Err(e) = managed.child.kill().await {
-                eprintln!(
-                    "[MY-CODE] Failed to kill process for session {}: {}",
-                    id, e
-                );
+
+            // On Windows the CLI is spawned via `cmd /C claude.cmd ...`, so the
+            // direct child is cmd.exe — killing it leaves the real claude.exe
+            // (and its node/helper children) alive, holding open handles on the
+            // session .jsonl file. Killing that file then fails with a sharing
+            // violation and the session appears "stuck" until the process tree
+            // finally exits on its own. Use taskkill /T /F to terminate the
+            // entire tree, then wait for the direct child to reap.
+            #[cfg(target_os = "windows")]
+            {
+                if let Some(pid) = managed.child.id() {
+                    let _ = std::process::Command::new("taskkill")
+                        .args(["/PID", &pid.to_string(), "/T", "/F"])
+                        .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                        .output();
+                }
+                let _ = managed.child.kill().await;
+                let _ = managed.child.wait().await;
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                if let Err(e) = managed.child.kill().await {
+                    eprintln!(
+                        "[MY-CODE] Failed to kill process for session {}: {}",
+                        id, e
+                    );
+                }
+                let _ = managed.child.wait().await;
             }
         }
     }

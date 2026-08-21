@@ -1,5 +1,7 @@
 import { memo, useState, useCallback, type ReactNode } from 'react';
 import { type ChatMessage } from '../../stores/chatStore';
+import { useChatStore } from '../../stores/chatStore';
+import { useSessionStore } from '../../stores/sessionStore';
 import { useFileStore } from '../../stores/fileStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useLightboxStore } from '../shared/ImageLightbox';
@@ -122,6 +124,8 @@ function UserMsg({ message }: Props) {
   const t = useT();
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState('');
   const attachments = message.attachments;
   const content = safeContent(message.content);
   const lines = content.split('\n');
@@ -137,70 +141,179 @@ function UserMsg({ message }: Props) {
     });
   }, [content]);
 
+  /** Edit in place: switch the bubble into an editable textarea. Save commits
+   *  the new text back to the message via updateMessage. */
+  const startEdit = useCallback(() => {
+    setEditText(content);
+    setEditing(true);
+  }, [content]);
+
+  const saveEdit = useCallback(() => {
+    const tabId = useSessionStore.getState().selectedSessionId;
+    if (!tabId || editText.trim() === '') {
+      setEditing(false);
+      return;
+    }
+    const tab = useChatStore.getState().getTab(tabId);
+    if (!tab) { setEditing(false); return; }
+    const msgIdx = tab.messages.findIndex((m) => m.id === message.id);
+    if (msgIdx === -1) { setEditing(false); return; }
+
+    // Rewind the conversation to this message (deletes it and everything after)
+    useChatStore.getState().rewindToTurn(tabId, msgIdx);
+    // Tell InputBar to resend the edited text as a new user message
+    window.dispatchEvent(new CustomEvent('mycode:edit-resend', { detail: editText }));
+    setEditing(false);
+    setEditText('');
+  }, [editText, message.id]);
+
+  const cancelEdit = useCallback(() => {
+    setEditing(false);
+    setEditText('');
+  }, []);
+
   return (
-    <div className="flex justify-end gap-2.5 group/user relative">
-      {/* Copy button — visible on hover */}
-      <button
-        onClick={handleCopy}
-        className="absolute -top-2 right-1 z-10 opacity-0 group-hover/user:opacity-100
-          px-1.5 py-0.5 rounded-md text-[10px] font-medium
-          bg-bg-tertiary/80 text-text-muted hover:text-text-primary
-          hover:bg-bg-tertiary border border-border-subtle
-          transition-smooth cursor-pointer"
-      >
-        {copied ? t('msg.copied') : t('msg.copyText')}
-      </button>
-      <div className="max-w-[75%] px-3.5 py-2.5 rounded-2xl rounded-br-md
-        bg-bg-user-msg text-text-inverse
-        text-sm leading-relaxed shadow-md whitespace-pre-wrap">
-        {renderUserContent(displayContent)}
-        {!expanded && isLong && (
-          <span className="text-white/60">…</span>
-        )}
-        {isLong && (
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="block mt-1.5 text-xs text-white/60 hover:text-white/90
-              transition-smooth"
-          >
-            {expanded ? '▲ 收起' : '▼ 展开全部'}
-          </button>
-        )}
-        {attachments && attachments.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {attachments.map((att, i) => (
+    <div className="flex justify-end gap-2.5">
+      <div className="flex flex-col items-end max-w-[75%]">
+        {editing ? (
+          /* --- In-place edit mode --- */
+          <div className="w-full rounded-2xl rounded-br-md border border-accent/40
+            bg-bg-user-msg text-text-inverse text-sm leading-relaxed shadow-md
+            overflow-hidden">
+            <textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) saveEdit();
+                if (e.key === 'Escape') cancelEdit();
+              }}
+              autoFocus
+              rows={Math.max(2, Math.min(12, lines.length + 1))}
+              className="w-full bg-transparent px-3.5 py-2.5 resize-y outline-none
+                placeholder:text-white/40"
+              placeholder={t('msg.editPlaceholder')}
+            />
+            {/* Save / cancel icon buttons */}
+            <div className="flex items-center justify-end gap-1 px-2 pb-2">
               <button
-                key={i}
-                onClick={() => {
-                  if (att.isImage) {
-                    useLightboxStore.getState().openFile(att.path, att.name);
-                  } else {
-                    useFileStore.getState().selectFile(att.path);
-                  }
-                }}
-                className="inline-flex items-center gap-2 px-2.5 py-1.5
-                  bg-white/10 hover:bg-white/20 rounded-lg border border-white/15
-                  transition-smooth cursor-pointer text-left"
+                onClick={cancelEdit}
+                title={t('msg.editCancel')}
+                className="p-1.5 rounded-md text-white/70 hover:text-white
+                  hover:bg-white/15 transition-smooth cursor-pointer"
+                aria-label={t('msg.editCancel')}
               >
-                {att.isImage && att.preview ? (
-                  <img src={att.preview} alt="" className="w-8 h-8 rounded object-cover" />
-                ) : (
-                  <span className="flex items-center justify-center w-8 h-8 rounded
-                    bg-white/10 text-[10px] font-mono font-semibold uppercase opacity-80">
-                    {getFileExt(att.name) || (
-                      <svg width="14" height="14" viewBox="0 0 12 12" fill="none"
-                        stroke="currentColor" strokeWidth="1.2">
-                        <path d="M7 1H3a1 1 0 00-1 1v8a1 1 0 001 1h6a1 1 0 001-1V4L7 1z" />
-                        <path d="M7 1v3h3" />
-                      </svg>
-                    )}
-                  </span>
-                )}
-                <span className="text-xs truncate max-w-[180px]">{att.name}</span>
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none"
+                  stroke="currentColor" strokeWidth="1.5">
+                  <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
+                </svg>
               </button>
-            ))}
+              <button
+                onClick={saveEdit}
+                disabled={editText.trim() === ''}
+                title={t('msg.editSave')}
+                className="p-1.5 rounded-md text-white/70 hover:text-white
+                  hover:bg-white/15 transition-smooth cursor-pointer
+                  disabled:opacity-40 disabled:cursor-not-allowed"
+                aria-label={t('msg.editSave')}
+              >
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none"
+                  stroke="currentColor" strokeWidth="1.5">
+                  <path d="M3 8.5l3.5 3.5L13 5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* --- Normal display mode --- */
+          <div className="px-3.5 py-2.5 rounded-2xl rounded-br-md
+            bg-bg-user-msg text-text-inverse
+            text-sm leading-relaxed shadow-md whitespace-pre-wrap">
+            {renderUserContent(displayContent)}
+            {!expanded && isLong && (
+              <span className="text-white/60">…</span>
+            )}
+            {isLong && (
+              <button
+                onClick={() => setExpanded(!expanded)}
+                className="block mt-1.5 text-xs text-white/60 hover:text-white/90
+                  transition-smooth"
+              >
+                {expanded ? '▲ 收起' : '▼ 展开全部'}
+              </button>
+            )}
+            {attachments && attachments.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {attachments.map((att, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      if (att.isImage) {
+                        useLightboxStore.getState().openFile(att.path, att.name);
+                      } else {
+                        useFileStore.getState().selectFile(att.path);
+                      }
+                    }}
+                    className="inline-flex items-center gap-2 px-2.5 py-1.5
+                      bg-white/10 hover:bg-white/20 rounded-lg border border-white/15
+                      transition-smooth cursor-pointer text-left"
+                  >
+                    {att.isImage && att.preview ? (
+                      <img src={att.preview} alt="" className="w-8 h-8 rounded object-cover" />
+                    ) : (
+                      <span className="flex items-center justify-center w-8 h-8 rounded
+                        bg-white/10 text-[10px] font-mono font-semibold uppercase opacity-80">
+                        {getFileExt(att.name) || (
+                          <svg width="14" height="14" viewBox="0 0 12 12" fill="none"
+                            stroke="currentColor" strokeWidth="1.2">
+                            <path d="M7 1H3a1 1 0 00-1 1v8a1 1 0 001 1h6a1 1 0 001-1V4L7 1z" />
+                            <path d="M7 1v3h3" />
+                          </svg>
+                        )}
+                      </span>
+                    )}
+                    <span className="text-xs truncate max-w-[180px]">{att.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
+        {/* Action row: copy + edit icon buttons below the bubble */}
+        <div className="flex items-center gap-1 mt-1 pr-1">
+          <button
+            onClick={handleCopy}
+            title={copied ? t('msg.copied') : t('msg.copyText')}
+            className="p-1.5 rounded-md text-text-tertiary hover:text-text-primary
+              hover:bg-bg-tertiary/60 transition-smooth cursor-pointer"
+            aria-label={t('msg.copyText')}
+          >
+            {copied ? (
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none"
+                stroke="currentColor" strokeWidth="1.5" className="text-success">
+                <path d="M3 8.5l3.5 3.5L13 5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            ) : (
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none"
+                stroke="currentColor" strokeWidth="1.5">
+                <rect x="5" y="5" width="9" height="9" rx="1.5" />
+                <path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" />
+              </svg>
+            )}
+          </button>
+          <button
+            onClick={startEdit}
+            title={t('msg.editMessage')}
+            className="p-1.5 rounded-md text-text-tertiary hover:text-text-primary
+              hover:bg-bg-tertiary/60 transition-smooth cursor-pointer"
+            aria-label={t('msg.editMessage')}
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"
+              stroke="currentColor" strokeWidth="1.5">
+              <path d="M11.5 2.5l2 2L6 12H4v-2l7.5-7.5z" strokeLinejoin="round" />
+              <path d="M9.5 4.5l2 2" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
       </div>
       <UserAvatar size="w-8 h-8 text-xs" className="mt-0.5" />
     </div>
@@ -404,6 +517,17 @@ function CommandFeedbackMsg({ message }: Props) {
    AssistantMsg — markdown with avatar (uses shared MarkdownRenderer)
    ================================================================ */
 function AssistantMsg({ message, isFirstInGroup = true }: Props) {
+  const t = useT();
+  const [copied, setCopied] = useState(false);
+  const content = safeContent(message.content);
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(content).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [content]);
+
   return (
     <div className="flex gap-3">
       {/* Avatar: show only for the first message in a consecutive group */}
@@ -413,7 +537,30 @@ function AssistantMsg({ message, isFirstInGroup = true }: Props) {
         <div className="w-8 flex-shrink-0" />
       )}
       <div className="flex-1 min-w-0 text-base text-text-primary leading-relaxed">
-        <MarkdownRenderer content={safeContent(message.content)} />
+        <MarkdownRenderer content={content} />
+        {/* Copy icon button below the reply */}
+        <div className="flex items-center gap-1 mt-1">
+          <button
+            onClick={handleCopy}
+            title={copied ? t('msg.copied') : t('msg.copyText')}
+            className="p-1.5 rounded-md text-text-tertiary hover:text-text-primary
+              hover:bg-bg-tertiary/60 transition-smooth cursor-pointer"
+            aria-label={t('msg.copyText')}
+          >
+            {copied ? (
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none"
+                stroke="currentColor" strokeWidth="1.5" className="text-success">
+                <path d="M3 8.5l3.5 3.5L13 5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            ) : (
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none"
+                stroke="currentColor" strokeWidth="1.5">
+                <rect x="5" y="5" width="9" height="9" rx="1.5" />
+                <path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" />
+              </svg>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

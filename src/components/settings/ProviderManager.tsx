@@ -7,7 +7,7 @@ import { parseAndValidate, importAsProvider, exportProvider } from '../../lib/ap
 import { AddProviderMenu } from './AddProviderMenu';
 import { ProviderCard, type CardTestStatus } from './ProviderCard';
 import { ProviderForm, type TestStatus } from './ProviderForm';
-import { DEEPSEEK_V4_FLASH, DEEPSEEK_V4_PRO, normalizeProviderModelName } from '../../lib/deepseek-models';
+import { normalizeProviderModelName } from '../../lib/deepseek-models';
 
 export function ProviderManager({ alwaysExpanded = false }: { alwaysExpanded?: boolean } = {}) {
   const t = useT();
@@ -21,6 +21,7 @@ export function ProviderManager({ alwaysExpanded = false }: { alwaysExpanded?: b
   const [collapsed, setCollapsed] = useState(alwaysExpanded ? false : true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [autoTestId, setAutoTestId] = useState<string | null>(null);
+  const [autoDiscoverId, setAutoDiscoverId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [importStatus, setImportStatus] = useState<'idle' | 'success'>('idle');
@@ -46,11 +47,7 @@ export function ProviderManager({ alwaysExpanded = false }: { alwaysExpanded?: b
       name: existingCount > 0 ? `${preset.name} (${existingCount + 1})` : preset.name,
       baseUrl: preset.baseUrl,
       apiFormat: preset.apiFormat,
-      modelMappings: [
-        { tier: 'opus', providerModel: preset.defaultModels?.opus || preset.defaultModel || DEEPSEEK_V4_PRO },
-        { tier: 'sonnet', providerModel: preset.defaultModels?.sonnet || preset.defaultModel || DEEPSEEK_V4_FLASH },
-        { tier: 'haiku', providerModel: preset.defaultModels?.haiku || preset.defaultModel || DEEPSEEK_V4_FLASH },
-      ],
+      modelMappings: [{ tier: '', providerModel: '' }],
       extra_env: { ...preset.extra_env },
       preset: preset.id,
     });
@@ -67,11 +64,7 @@ export function ProviderManager({ alwaysExpanded = false }: { alwaysExpanded?: b
       name: '',
       baseUrl: '',
       apiFormat: 'openai',
-      modelMappings: [
-        { tier: 'opus', providerModel: DEEPSEEK_V4_PRO },
-        { tier: 'sonnet', providerModel: DEEPSEEK_V4_FLASH },
-        { tier: 'haiku', providerModel: DEEPSEEK_V4_FLASH },
-      ],
+      modelMappings: [{ tier: '', providerModel: '' }],
       extra_env: {},
     });
     const { providers: updated } = useProviderStore.getState();
@@ -157,6 +150,13 @@ export function ProviderManager({ alwaysExpanded = false }: { alwaysExpanded?: b
     }
   }, []);
 
+  /** Card discover button: open the edit form and auto-run model discovery */
+  const handleCardDiscover = useCallback((providerId: string) => {
+    setAutoTestId(null);
+    setEditingId(providerId);
+    setAutoDiscoverId(providerId);
+  }, []);
+
 
   /** Export from card */
   const handleCardExport = useCallback(async (providerId: string) => {
@@ -232,10 +232,11 @@ export function ProviderManager({ alwaysExpanded = false }: { alwaysExpanded?: b
                   testStatus={cardTestStatuses[p.id] || 'idle'}
                   testTimeMs={cardTestTimes[p.id]}
                   onActivate={() => setActive(p.id)}
-                  onToggleEdit={() => { setEditingId(editingId === p.id ? null : p.id); setAutoTestId(null); }}
+                  onToggleEdit={() => { setEditingId(editingId === p.id ? null : p.id); setAutoTestId(null); setAutoDiscoverId(null); }}
                   onRequestDelete={() => setDeleteTarget(p.id)}
                   onExport={() => handleCardExport(p.id)}
                   onTest={() => handleCardTest(p.id)}
+                  onDiscover={() => handleCardDiscover(p.id)}
                 />
 
                 {/* Delete confirmation inline */}
@@ -266,9 +267,10 @@ export function ProviderManager({ alwaysExpanded = false }: { alwaysExpanded?: b
                 {editingId === p.id && (
                   <ProviderForm
                     provider={p}
-                    onClose={() => { setEditingId(null); setAutoTestId(null); }}
+                    onClose={() => { setEditingId(null); setAutoTestId(null); setAutoDiscoverId(null); }}
                     onDelete={() => setDeleteTarget(p.id)}
                     autoTest={autoTestId === p.id}
+                    autoDiscover={autoDiscoverId === p.id}
                     onTestStatusChange={(status: TestStatus) =>
                       setCardTestStatuses((prev) => ({ ...prev, [p.id]: status as CardTestStatus }))
                     }

@@ -196,6 +196,11 @@ export interface StepResult {
   message: string;
 }
 
+export interface ModelDiscoveryResult {
+  models: string[];
+  endpoint: string;
+}
+
 export interface ConnectionTestResult {
   connectivity: StepResult;
   auth: StepResult;
@@ -575,6 +580,9 @@ export const bridge = {
 
   saveProviders: (data: ProvidersFile) =>
     invoke<void>('save_providers', { data }),
+
+  discoverProviderModels: (baseUrl: string, apiFormat: string, apiKey: string, proxyUrl?: string) =>
+    invoke<ModelDiscoveryResult>('discover_provider_models', { baseUrl, apiFormat, apiKey, proxyUrl: proxyUrl || null }),
 
   testProviderConnection: (baseUrl: string, apiFormat: string, apiKey: string, model: string, proxyUrl?: string) =>
     invoke<ConnectionTestResult>('test_provider_connection', { baseUrl, apiFormat, apiKey, model, proxyUrl: proxyUrl || null }),

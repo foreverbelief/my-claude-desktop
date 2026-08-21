@@ -16,6 +16,23 @@ import { envFingerprint, resolveModelForProvider, resolveThinkingLevelForProvide
 import { useProviderStore } from '../stores/providerStore';
 import { t } from '../lib/i18n';
 
+// --- Debounced session list refresh (M14) ---
+// Stream turns can complete with multiple events (result, process_exit),
+// each triggering a redundant disk listSessions call. Debounce them.
+let _fetchSessionsTimer: ReturnType<typeof setTimeout> | null = null;
+function debouncedFetchSessions() {
+  if (_fetchSessionsTimer) return;
+  _fetchSessionsTimer = setTimeout(() => {
+    _fetchSessionsTimer = null;
+    useSessionStore.getState().fetchSessions();
+  }, 400);
+}
+
+// --- Throttled lastProgressAt writes (H7) ---
+// Stall detection only needs ~sub-second updates; throttling avoids rebuilding
+// the tabs Map on every stream delta.
+const _lastProgressByTab = new Map<string, number>();
+
 // --- Error classification for user-facing messages ---
 // Each pattern maps to a friendly i18n key. Matched errors show the friendly
 // message as primary text with raw error in a collapsible details block.
@@ -636,7 +653,7 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
           }
         }
 
-        useSessionStore.getState().fetchSessions();
+        debouncedFetchSessions();
 
         // AI Title Generation for background tabs (same 3rd-turn logic)
         if (msg.subtype === 'success') {
@@ -713,7 +730,7 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
           store.setInputDraft(tabId, bgExitDraft ? `${bgExitDraft}\n\n${bgPendingText}` : bgPendingText);
           store.clearPendingMessages(tabId);
         }
-        useSessionStore.getState().fetchSessions();
+        debouncedFetchSessions();
         break;
       }
       case 'system':
@@ -778,8 +795,17 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
     const tabId = ownerTabId || activeTabId;
     if (!tabId) return;
 
-    // Update lastProgressAt on every foreground stream event for stall detection
-    useChatStore.getState().setSessionMeta(tabId, { lastProgressAt: Date.now() });
+    // Update lastProgressAt on every foreground stream event for stall detection.
+    // H7: throttled to 300ms — setSessionMeta rebuilds the tabs Map each call,
+    // and unthrottled writes at delta rate trigger re-render storms.
+    {
+      const now = Date.now();
+      const last = _lastProgressByTab.get(tabId) ?? 0;
+      if (now - last >= 300) {
+        _lastProgressByTab.set(tabId, now);
+        useChatStore.getState().setSessionMeta(tabId, { lastProgressAt: now });
+      }
+    }
 
     // --- SDK Permission Request (routed through stream channel for reliability) ---
     if (msg.type === 'mycode_permission_request') {
@@ -950,14 +976,16 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
           useSessionStore.getState().promoteDraft(tabId, cliSessionId);
         }
 
-        useSessionStore.getState().fetchSessions();
+        debouncedFetchSessions();
       }
     }
 
     // Helper: clear accumulated partial text (it will be replaced by the full message)
     const clearPartial = () => {
-      // Flush any buffered text so the final tokens aren't lost
-      flushStreamBuffer();
+      // H6 fix: flush ONLY this session's buffer (msgStdinId), never all
+      // sessions — otherwise a foreground result force-flushes every background
+      // session's partial stream and breaks its rAF batching.
+      flushStreamBuffer(msgStdinId || undefined);
       const tabData = useChatStore.getState().getTab(tabId);
       if (tabData && (tabData.isStreaming || tabData.partialText || tabData.partialThinking)) {
         const newTabs = new Map(useChatStore.getState().tabs);
@@ -1573,7 +1601,8 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
                 });
                 if (!(window as any).__claudeUnlisteners) (window as any).__claudeUnlisteners = {};
                 (window as any).__claudeUnlisteners[retryId] = () => { retryUnlisten(); retryUnlistenStderr(); };
-                (window as any).__claudeUnlisten = (window as any).__claudeUnlisteners[retryId];
+                // M13: removed the legacy __claudeUnlisten singleton — each session
+                // manages its own listeners via __claudeUnlisteners[stdinId].
 
                 const retryResolvedModel = resolveModelForProvider(selectedModel);
                 const retryContextWindowMode = useSettingsStore.getState().contextWindowMode;
@@ -1600,8 +1629,12 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
                   snapshotContextWindowMode: retryContextWindowMode,
                   spawnedModel: retryResolvedModel,
                 });
-                const tabId = useSessionStore.getState().selectedSessionId;
-                if (tabId) useSessionStore.getState().registerStdinTab(retryId, tabId);
+                // H1 fix: use the tabId resolved at stream-handling time (the
+                // session that OWNS this stream), NOT a re-read of
+                // selectedSessionId — the user may have switched tabs while
+                // this async retry was in flight.
+                const retryTabId = tabId;
+                if (retryTabId) useSessionStore.getState().registerStdinTab(retryId, retryTabId);
                 bridge.trackSession(session.session_id).catch(() => {});
               } catch (retryErr) {
                 console.error('[MY-CODE] Provider-switch auto-retry failed:', retryErr);
@@ -1640,7 +1673,14 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
               delete (window as any).__claudeUnlisteners[oldStdinId];
             }
           }
-          // Silently restart — no user message bubble
+          // Silently restart — no user message bubble.
+          // H1 fix: if the user switched tabs while the CLI exited, abort the
+          // auto-restart — a rAF-triggered handleSubmit would otherwise read the
+          // NEW selectedSessionId and inject "Continue." into the wrong session.
+          if (useSessionStore.getState().selectedSessionId !== tabId) {
+            console.warn('[MY-CODE] Auto-restart aborted: user switched session during ExitPlanMode exit');
+            break;
+          }
           silentRestartRef.current = true;
           setInputSync('Continue.');
           useChatStore.getState().setActivityStatus(tabId, { phase: 'thinking' });
@@ -1746,8 +1786,8 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
         agentActions.completeAll(
           msg.subtype === 'success' ? 'completed' : 'error'
         );
-        useSessionStore.getState().fetchSessions();
-        setTimeout(() => useSessionStore.getState().fetchSessions(), 1000);
+        debouncedFetchSessions();
+        // H7: drop the redundant delayed duplicate call — debounce covers it
 
         // --- AI Title Generation (TK-001): on 3rd successful turn, generate a title ---
         if (msg.subtype === 'success') {
@@ -1816,24 +1856,22 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
           bridge.sendStdin(compactStdinId, '/compact').catch((err) => {
             console.error('[MY-CODE] Auto-compact failed:', err);
           });
-          // FI-4: Timeout fallback — if compact doesn't complete within 90s, auto-complete
+          // M15 fix: timeout no longer "completes" the compact card or switches
+          // to idle — a large-context compact can legitimately exceed 15s, and
+          // marking it done + idle let users type into an in-flight compact.
+          // Now we only surface a "still running" hint and let the authoritative
+          // result event backfill the card and status.
           setTimeout(() => {
             const meta = useChatStore.getState().getTab(tabId)?.sessionMeta ?? {};
             if (meta.pendingCommandMsgId === compactMsgId) {
               useChatStore.getState().updateMessage(tabId, compactMsgId, {
-                commandCompleted: true,
                 commandData: {
                   ...(useChatStore.getState().getTab(tabId)?.messages ?? []).find((m) => m.id === compactMsgId)?.commandData,
-                  output: 'Compact timed out',
-                  completedAt: Date.now(),
+                  output: t('chat.compactStillRunning'),
                 },
               });
-              useChatStore.getState().setSessionMeta(tabId, { pendingCommandMsgId: undefined });
-              if (useChatStore.getState().getTab(tabId)?.sessionStatus === 'running') {
-                useChatStore.getState().setSessionStatus(tabId, 'idle');
-              }
             }
-          }, 15_000); // Bug C fix (#27): reduced from 90s to 15s
+          }, 15_000);
           break; // Skip pending message flush — compact takes priority
         }
 
@@ -1959,9 +1997,8 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
           (window as any).__claudeUnlisteners[exitingStdinId]();
           delete (window as any).__claudeUnlisteners[exitingStdinId];
         }
-        if ((window as any).__claudeUnlisten) {
-          (window as any).__claudeUnlisten = null;
-        }
+        // M13: removed legacy __claudeUnlisten singleton reset — listeners are
+        // keyed per stdinId so one session exiting can never clear another's.
 
         {
           const exitMessages = useChatStore.getState().getTab(tabId)?.messages ?? [];
@@ -2005,7 +2042,7 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
         }
 
         agentActions.completeAll();
-        useSessionStore.getState().fetchSessions();
+        debouncedFetchSessions();
         break;
       }
 
@@ -2025,9 +2062,16 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
     } catch (err) {
       // P1-4: catch-all for unexpected errors in stream message processing
       console.error('[MY-CODE] handleStreamMessage error:', err, 'msg:', msg?.type, msg?.subtype);
-      const errTabId = useSessionStore.getState().selectedSessionId;
-      if (errTabId) {
-        useChatStore.getState().addMessage(errTabId, {
+      // H2 fix: route the error to the session that OWNS this stream (via the
+      // stdinId→tabId mapping), never to the currently-focused session — a
+      // background session failure must not pollute the visible conversation.
+      const errStdinId = msg?.__stdinId;
+      const errTabId = errStdinId
+        ? useSessionStore.getState().getTabForStdin(errStdinId)
+        : undefined;
+      const targetErrTabId = errTabId || useSessionStore.getState().selectedSessionId;
+      if (targetErrTabId) {
+        useChatStore.getState().addMessage(targetErrTabId, {
           id: generateMessageId(),
           role: 'system',
           type: 'text',

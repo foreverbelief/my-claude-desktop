@@ -46,27 +46,29 @@ export function ModelSelector({ disabled = false }: { disabled?: boolean }) {
   }, [open]);
 
   // Build display options: official Claude models + extra models from provider.
-  // Deduplicate: if multiple Claude models map to the same provider model, keep only the first.
+  // When a provider has mappings, ONLY show models that actually map to a
+  // provider model name — showing unmapped official options (e.g. the generic
+  // "DeepseekV4Flash" label for claude-sonnet-4-6 when the provider has no
+  // sonnet mapping) lets the user pick something that will fail with
+  // "no_mapping" / a confusing 422 once sent.
   const displayOptions = useMemo((): DisplayOption[] => {
     if (!activeProvider || activeProvider.modelMappings.length === 0) {
       return MODEL_OPTIONS.map((m) => ({ id: m.id, label: m.label, short: m.short, mapped: false, isExtra: false }));
     }
 
-    // Official models with tier mapping.
-    // When multiple Claude models map to the same provider model (e.g. Opus and Opus 1M
-    // both map to "mimo-v2-pro"), keep both entries with their original labels so the user
-    // can still distinguish them — the 1M variant uses a higher context window (#139 port).
-    const official = MODEL_OPTIONS.map((m) => {
+    // Official models WITH a tier mapping — show the ACTUAL provider model name
+    // (e.g. "DeepSeek-V4-Flash-0731", "kimi-k2.5"). Unmapped official models
+    // are omitted entirely.
+    const official: DisplayOption[] = [];
+    for (const m of MODEL_OPTIONS) {
       const tier = TIER_MAP[m.id];
       const mapping = activeProvider.modelMappings.find((mm) => mm.tier === tier);
       if (mapping?.providerModel) {
         const providerModel = normalizeProviderModelName(mapping.providerModel);
         const providerLabel = displayProviderModelName(providerModel);
-        const label = providerLabel === m.short ? m.short : `${m.short} -> ${providerLabel}`;
-        return { id: m.id, label, short: providerLabel, mapped: true, isExtra: false };
+        official.push({ id: m.id, label: providerLabel, short: providerLabel, mapped: true, isExtra: false });
       }
-      return { id: m.id, label: m.label, short: m.short, mapped: false, isExtra: false };
-    });
+    }
 
     // Extra models (non-tier mappings added by user)
     const extras: DisplayOption[] = activeProvider.modelMappings
@@ -80,7 +82,10 @@ export function ModelSelector({ disabled = false }: { disabled?: boolean }) {
         return { id: m.tier, label: providerLabel, short, mapped: true, isExtra: true };
       });
 
-    return [...official, ...extras];
+    // If nothing maps (provider exists but has only empty mappings), fall back
+    // to the official list so the selector still shows something usable.
+    const all = [...official, ...extras];
+    return all.length > 0 ? all : MODEL_OPTIONS.map((m) => ({ id: m.id, label: m.label, short: m.short, mapped: false, isExtra: false }));
   }, [activeProvider]);
 
   const fallbackOption = displayOptions.find((option) => option.mapped) || displayOptions[0];

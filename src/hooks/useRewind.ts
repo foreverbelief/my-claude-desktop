@@ -65,9 +65,7 @@ export function useRewind() {
         (window as any).__claudeUnlisteners[stdinId]();
         delete (window as any).__claudeUnlisteners[stdinId];
       }
-      if ((window as any).__claudeUnlisten) {
-        (window as any).__claudeUnlisten = null;
-      }
+      // M13: removed legacy __claudeUnlisten singleton
     }
   }, []);
 

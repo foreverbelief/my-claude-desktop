@@ -3,6 +3,7 @@ import { useSettingsStore, type SessionMode } from '../../stores/settingsStore';
 import { useChatStore, generateMessageId } from '../../stores/chatStore';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useT } from '../../lib/i18n';
+import { ConfirmDialog } from '../shared/ConfirmDialog';
 
 const MODES: { id: SessionMode; labelKey: string; icon: ReactNode }[] = [
   {
@@ -53,6 +54,7 @@ export function ModeSelector({ disabled = false }: { disabled?: boolean }) {
   const sessionMode = useSettingsStore((s) => s.sessionMode);
   const setSessionMode = useSettingsStore((s) => s.setSessionMode);
   const [open, setOpen] = useState(false);
+  const [pendingBypass, setPendingBypass] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   // Close on outside click
@@ -77,6 +79,15 @@ export function ModeSelector({ disabled = false }: { disabled?: boolean }) {
 
   const switchMode = (mode: SessionMode) => {
     if (mode === sessionMode) return;
+    // S1: bypass mode is dangerous — require explicit confirmation
+    if (mode === 'bypass') {
+      setPendingBypass(true);
+      return;
+    }
+    doSwitchMode(mode);
+  };
+
+  const doSwitchMode = (mode: SessionMode) => {
     setSessionMode(mode);
     const fb = MODE_FEEDBACK[mode];
     const modeTabId = useSessionStore.getState().selectedSessionId;
@@ -146,6 +157,22 @@ export function ModeSelector({ disabled = false }: { disabled?: boolean }) {
             );
           })}
         </div>
+      )}
+
+      {/* S1: bypass confirmation dialog — remind the user this skips ALL confirmations */}
+      {pendingBypass && (
+        <ConfirmDialog
+          open
+          title={t('mode.bypassConfirmTitle')}
+          message={t('mode.bypassConfirmMessage')}
+          confirmLabel={t('mode.bypassConfirmAction')}
+          variant="danger"
+          onConfirm={() => {
+            setPendingBypass(false);
+            doSwitchMode('bypass');
+          }}
+          onCancel={() => setPendingBypass(false)}
+        />
       )}
     </div>
   );

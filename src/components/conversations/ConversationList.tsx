@@ -388,21 +388,59 @@ export function ConversationList() {
 
   // --- Delete handlers ---
   const executeDelete = useCallback(async (sessionId: string, sessionPath: string) => {
-    try {
-      if (sessionPath) {
-        await bridge.deleteSession(sessionId, sessionPath);
-      } else {
-        useSessionStore.getState().removeDraft(sessionId);
-      }
-      if (selectedId === sessionId) {
-        setSelected(null);
-        useChatStore.getState().resetTab(sessionId);
-      }
-      useChatStore.getState().removeFromCache(sessionId);
-      fetchSessions();
-    } catch (err) {
-      console.error('Failed to delete session:', err);
+    // OPTIMISTIC DELETE: clear every piece of local UI state FIRST so the
+    // conversation disappears from the list instantly with zero delay, then
+    // run the backend cleanup (kill process + delete .jsonl) in the background.
+    // Previously the UI waited on killSession + deleteSession serially, which
+    // on Windows could take hundreds of ms (taskkill /T /F + wait + retries),
+    // making delete feel laggy, and leftover tab/cache state kept old chat
+    // status visible after deletion.
+
+    // 1) Instantly remove tab + caches + list entry (UI updates immediately).
+    if (selectedId === sessionId) {
+      setSelected(null);
     }
+    useChatStore.getState().removeTab(sessionId);
+    useChatStore.getState().removeFromCache(sessionId);
+    useAgentStore.getState().removeFromCache(sessionId);
+    useSessionStore.getState().setSessionRunning(sessionId, false);
+    // Remove from the in-memory session list right away; fetchSessions() below
+    // will reconcile with disk in the background.
+    useSessionStore.setState((state) => ({
+      sessions: state.sessions.filter((s) => s.id !== sessionId),
+    }));
+
+    // 2) Background: kill any live CLI process tree, then delete the file.
+    //    Fire-and-forget so the UI never blocks on it.
+    void (async () => {
+      try {
+        const tabState = useChatStore.getState().getTab(sessionId);
+        const stdinId = tabState?.sessionMeta.stdinId;
+        if (stdinId) {
+          try {
+            await bridge.killSession(stdinId);
+          } catch {
+            // Process may already be gone — non-fatal.
+          }
+          if ((window as any).__claudeUnlisteners?.[stdinId]) {
+            (window as any).__claudeUnlisteners[stdinId]();
+            delete (window as any).__claudeUnlisteners[stdinId];
+          }
+          useSessionStore.getState().unregisterStdinTab(stdinId);
+          useChatStore.getState().setSessionMeta(sessionId, { stdinId: undefined });
+        }
+        if (sessionPath) {
+          await bridge.deleteSession(sessionId, sessionPath);
+        } else {
+          useSessionStore.getState().removeDraft(sessionId);
+        }
+      } catch (err) {
+        console.error('Failed to delete session:', err);
+      } finally {
+        // Re-sync the list from disk (removes the entry if deletion succeeded).
+        fetchSessions();
+      }
+    })();
   }, [selectedId, setSelected, fetchSessions]);
 
   // Single delete → confirm dialog
